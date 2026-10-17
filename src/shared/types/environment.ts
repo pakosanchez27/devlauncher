@@ -1,0 +1,85 @@
+/**
+ * Contratos del verificador de entorno (EP-03).
+ *
+ * Compartidos entre el proceso principal, el preload y el renderer.
+ */
+
+/** Herramientas externas que DevLauncher puede detectar. */
+export type ToolId = 'php' | 'node' | 'npm' | 'composer' | 'mysql'
+
+/** Origen de la ruta de un ejecutable detectado. */
+export type ToolSource = 'configured' | 'wamp' | 'path' | 'none'
+
+/** Estado de una herramienta externa. */
+export interface ToolStatus {
+  id: ToolId
+  label: string
+  available: boolean
+  /** Versión detectada (primera línea de la salida), si la hay. */
+  version: string | null
+  /** Ejecutable usado para la detección. */
+  path: string | null
+  source: ToolSource
+  /** true si es imprescindible para ejecutar un proyecto Laravel. */
+  required: boolean
+  /** Mensaje legible (motivo del fallo o confirmación). */
+  message: string
+}
+
+/** Estado de una instalación de WampServer. */
+export interface WampStatus {
+  installed: boolean
+  path: string | null
+  phpPath: string | null
+  mysqlPath: string | null
+}
+
+/** Comprobación de un requisito dentro de la carpeta de un proyecto. */
+export interface RequirementCheck {
+  id: string
+  label: string
+  /** Ruta relativa comprobada dentro del proyecto. */
+  target: string
+  present: boolean
+  required: boolean
+  /** Qué hacer si falta. */
+  hint: string
+}
+
+/** Estado de un puerto TCP. */
+export interface PortStatus {
+  port: number
+  label: string
+  available: boolean
+}
+
+/** Informe global del entorno. */
+export interface EnvironmentReport {
+  tools: ToolStatus[]
+  wamp: WampStatus
+  /** Etiquetas de herramientas obligatorias no disponibles. */
+  missing: string[]
+  generatedAt: string
+}
+
+/** Informe de requisitos de un proyecto concreto. */
+export interface ProjectRequirementsReport {
+  projectPath: string
+  checks: RequirementCheck[]
+  /** Etiquetas de requisitos obligatorios que faltan. */
+  missing: string[]
+}
+
+/** Informe de disponibilidad de puertos. */
+export interface PortsReport {
+  ports: PortStatus[]
+  generatedAt: string
+}
+
+/** Preferencias globales de DevLauncher. */
+export interface AppSettings {
+  /** Rutas de ejecutables indicadas manualmente (tienen prioridad). */
+  executables: Partial<Record<ToolId, string>>
+  /** Ruta raíz de WampServer, si se quiere forzar. */
+  wampPath: string | null
+}
