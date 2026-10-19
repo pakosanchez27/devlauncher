@@ -12,7 +12,7 @@ import type {
   WampStatus
 } from '@shared/types/environment'
 import { executableName, runCommand } from './command'
-import { isPortAvailable } from './readiness'
+import { inspectPort } from './ports.service'
 import { getSettings } from './settings.service'
 
 /**
@@ -282,11 +282,16 @@ export async function checkProjectRequirements(
 /** Comprueba la disponibilidad de los puertos habituales del stack. */
 export async function checkPorts(): Promise<{ ports: PortStatus[]; generatedAt: string }> {
   const ports = await Promise.all(
-    DEFAULT_PORTS.map(async ({ port, label }) => ({
-      port,
-      label,
-      available: await isPortAvailable(port)
-    }))
+    DEFAULT_PORTS.map(async ({ port, label }): Promise<PortStatus> => {
+      const inspection = await inspectPort(port)
+      return {
+        port,
+        label,
+        available: inspection.available,
+        reservedByUs: inspection.reservedByUs,
+        owner: inspection.owner
+      }
+    })
   )
 
   return { ports, generatedAt: new Date().toISOString() }

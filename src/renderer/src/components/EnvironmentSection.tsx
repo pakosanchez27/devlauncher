@@ -153,14 +153,24 @@ function EnvironmentSection(): ReactElement {
         {(ports?.ports ?? []).map((port) => (
           <li
             key={port.port}
-            className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm"
+            className="flex flex-col gap-1 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm"
           >
-            <span className="text-slate-300">
-              {port.label} <span className="font-mono text-slate-500">:{port.port}</span>
-            </span>
-            <span className={availabilityBadge(port.available)}>
-              {port.available ? 'Libre' : 'Ocupado'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-300">
+                {port.label} <span className="font-mono text-slate-500">:{port.port}</span>
+              </span>
+              <span className={availabilityBadge(port.available)}>
+                {port.available ? 'Libre' : 'Ocupado'}
+              </span>
+            </div>
+            {port.owner && (
+              <span className="text-[10px] text-slate-500">
+                {port.owner.name ?? 'Proceso desconocido'} (PID {port.owner.pid})
+              </span>
+            )}
+            {port.reservedByUs && (
+              <span className="text-[10px] text-indigo-400">Reservado por DevLauncher</span>
+            )}
           </li>
         ))}
       </ul>

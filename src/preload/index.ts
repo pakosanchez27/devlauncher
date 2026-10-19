@@ -12,10 +12,11 @@ import type {
 import type {
   AppSettings,
   EnvironmentReport,
+  PortInspection,
   PortsReport,
   ProjectRequirementsReport
 } from '@shared/types/environment'
-import type { LauncherEvent, LaunchSession } from '@shared/types/launcher'
+import type { LauncherEvent, LaunchSession, ManagedProcessInfo } from '@shared/types/launcher'
 
 /**
  * API expuesta al renderer. Es una superficie blanca y tipada: el renderer
@@ -44,7 +45,9 @@ const api = {
     check: (): Promise<EnvironmentReport> => ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK),
     checkProject: (projectPath: string): Promise<ProjectRequirementsReport> =>
       ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PROJECT, projectPath),
-    checkPorts: (): Promise<PortsReport> => ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PORTS)
+    checkPorts: (): Promise<PortsReport> => ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PORTS),
+    inspectPort: (port: number): Promise<PortInspection> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ENV_INSPECT_PORT, port)
   },
 
   settings: {
@@ -56,8 +59,14 @@ const api = {
   launcher: {
     start: (projectId: string): Promise<LaunchSession> =>
       ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_START, projectId),
-    stop: (): Promise<LaunchSession | null> => ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_STOP),
-    status: (): Promise<LaunchSession | null> => ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_STATUS),
+    /** Detiene un entorno concreto o todos si se omite `projectId`. */
+    stop: (projectId?: string): Promise<LaunchSession[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_STOP, projectId),
+    stopService: (serviceId: string): Promise<ManagedProcessInfo | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_STOP_SERVICE, serviceId),
+    status: (): Promise<LaunchSession[]> => ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_STATUS),
+    processes: (): Promise<ManagedProcessInfo[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_PROCESSES),
     /** Se suscribe a los eventos del motor; devuelve la función para cancelarla. */
     onEvent: (listener: (event: LauncherEvent) => void): (() => void) => {
       const handler = (_event: IpcRendererEvent, payload: LauncherEvent): void => listener(payload)

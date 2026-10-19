@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { frameworkLabel } from '@shared/constants/frameworks'
+import type { LaunchState } from '@shared/types/launcher'
 import type { Framework, Project } from '@shared/types/project'
 import ProjectItem from './ProjectItem'
 import { frameworkBadgeClass } from '../lib/framework-colors'
@@ -23,6 +24,7 @@ function ProjectManager(): ReactElement {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<FrameworkFilter>('all')
+  const [launchStates, setLaunchStates] = useState<Record<string, LaunchState>>({})
 
   const reload = useCallback(async (): Promise<void> => {
     setProjects(await window.api.projects.list())
@@ -33,6 +35,34 @@ function ProjectManager(): ReactElement {
       .catch((cause: unknown) => setError(messageFromError(cause)))
       .finally(() => setLoading(false))
   }, [reload])
+
+  // Estado del entorno de cada proyecto: permite alternar Iniciar/Detener.
+  useEffect(() => {
+    let active = true
+
+    window.api.launcher
+      .status()
+      .then((sessions) => {
+        if (!active) return
+        setLaunchStates(
+          Object.fromEntries(sessions.map((session) => [session.projectId, session.state]))
+        )
+      })
+      .catch((cause: unknown) => setError(messageFromError(cause)))
+
+    const unsubscribe = window.api.launcher.onEvent((event) => {
+      if (event.type !== 'session') return
+      setLaunchStates((previous) => ({
+        ...previous,
+        [event.session.projectId]: event.session.state
+      }))
+    })
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [])
 
   const counts = useMemo(() => {
     const map = new Map<Framework, number>()
@@ -83,10 +113,20 @@ function ProjectManager(): ReactElement {
     })
   }
 
+  // Arrancar/parar no bloquea el catálogo: el estado llega por eventos y así se
+  // pueden lanzar varios entornos en paralelo.
   function handleLaunch(project: Project): void {
-    void run(async () => {
-      await window.api.launcher.start(project.id)
-    })
+    setError(null)
+    window.api.launcher
+      .start(project.id)
+      .catch((cause: unknown) => setError(messageFromError(cause)))
+  }
+
+  function handleStop(project: Project): void {
+    setError(null)
+    window.api.launcher
+      .stop(project.id)
+      .catch((cause: unknown) => setError(messageFromError(cause)))
   }
 
   function handleOpen(project: Project): void {
@@ -110,6 +150,11 @@ function ProjectManager(): ReactElement {
     if (!confirmed) return
 
     void run(async () => {
+      // Un proyecto eliminado no debe dejar su entorno corriendo.
+      const state = launchStates[project.id]
+      if (state === 'ready' || state === 'starting') {
+        await window.api.launcher.stop(project.id)
+      }
       await window.api.projects.remove(project.id)
       await reload()
     })
@@ -173,7 +218,9 @@ function ProjectManager(): ReactElement {
               key={project.id}
               project={project}
               busy={busy}
+              launchState={launchStates[project.id]}
               onLaunch={handleLaunch}
+              onStop={handleStop}
               onOpen={handleOpen}
               onRename={handleRename}
               onDelete={handleDelete}

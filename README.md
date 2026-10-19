@@ -2,7 +2,7 @@
 
 Lanzador de escritorio para proyectos Laravel en Windows.
 
-> **Estado:** EP-04 (Motor de automatización) — arranque del entorno con un botón.
+> **Estado:** EP-05 (Administración de procesos y puertos) — varios entornos a la vez, sin conflictos.
 
 ## Stack
 
@@ -49,11 +49,14 @@ Flujo de un canal:
 | `env:check`              | renderer → main | Detecta PHP, Node, npm, Composer, MySQL y WampServer |
 | `env:check-project`      | renderer → main | Comprueba los requisitos de un proyecto              |
 | `env:check-ports`        | renderer → main | Comprueba la disponibilidad de puertos               |
+| `env:inspect-port`       | renderer → main | Inspecciona un puerto y el proceso que lo ocupa      |
 | `settings:get`           | renderer → main | Lee las preferencias globales                        |
 | `settings:update`        | renderer → main | Guarda las preferencias globales                     |
 | `launcher:start`         | renderer → main | Arranca el entorno de un proyecto (EP-04)            |
-| `launcher:stop`          | renderer → main | Detiene el entorno en marcha                         |
-| `launcher:status`        | renderer → main | Devuelve la sesión de arranque actual                |
+| `launcher:stop`          | renderer → main | Detiene un entorno (o todos)                         |
+| `launcher:stop-service`  | renderer → main | Detiene un único servicio gestionado                 |
+| `launcher:status`        | renderer → main | Devuelve las sesiones de arranque                    |
+| `launcher:processes`     | renderer → main | Lista los procesos gestionados (PID, puertos…)       |
 | `launcher:event`         | main → renderer | Progreso del arranque y salida de los procesos       |
 
 ### Almacenamiento
@@ -126,6 +129,30 @@ Detalles:
   puertos.
 - Al cerrar DevLauncher se detienen los procesos que haya lanzado.
 
+## Administración de procesos y puertos (EP-05)
+
+Cada proyecto arrancado tiene su **propia sesión**: pueden convivir varios
+entornos a la vez y cada uno se detiene por separado.
+
+- **Sin conflictos internos**: los puertos de `artisan serve` se reservan por
+  sesión; dos proyectos nunca reciben el mismo, aunque el servicio todavía no
+  esté escuchando. Vite se reserva el puerto que anuncia al arrancar.
+- **Conflictos externos**: al comprobar un puerto se muestra qué ejecutable lo
+  ocupa y su PID (`env:inspect-port`). El panel «Puertos» del verificador también
+  indica el dueño de 3306, 8000 y 5173.
+- **Gestor de procesos**: el panel «Procesos y puertos» lista los procesos vivos
+  con proyecto, servicio, PID, puertos y tiempo transcurrido; permite detener un
+  servicio suelto, un entorno completo o todos.
+- **Parada granular**: el botón de cada proyecto alterna entre «Iniciar» y
+  «Detener», y cada servicio tiene su propio botón en el panel de entornos.
+- **Cierre fiable**: al salir se espera a que `taskkill` termine. Además, los
+  procesos se registran en `processes.json`: si la aplicación se cierra de forma
+  anómala, al volver a arrancar se limpian los huérfanos comprobando que el PID
+  y su fecha de creación coinciden con los registrados (nunca se mata un proceso
+  ajeno que reutilizó el PID).
+- **Una sola instancia**: dos DevLauncher a la vez se pisarían procesos y
+  puertos, así que la segunda ventana reutiliza (y enfoca) la primera.
+
 ## Estructura
 
 ```
@@ -137,8 +164,10 @@ src/
 │     ├─ app.service.ts
 │     ├─ command.ts              # Ejecución de comandos externos
 │     ├─ environment.service.ts  # Detección de herramientas, requisitos y puertos
-│     ├─ launcher.service.ts     # Motor de arranque ordenado (EP-04)
-│     ├─ process.service.ts      # Procesos de larga duración (spawn/kill)
+│     ├─ launcher.service.ts     # Motor de arranque y sesiones por proyecto (EP-04/05)
+│     ├─ ports.service.ts        # Reserva de puertos y dueño de cada puerto (EP-05)
+│     ├─ process.service.ts      # Procesos de larga duración (spawn/kill) y huérfanos
+│     ├─ process.repository.ts   # Persistencia de procesos (limpieza tras un cierre anómalo)
 │     ├─ readiness.ts            # Puertos y espera a que un servicio esté listo
 │     ├─ events.ts               # Emisión de eventos del motor al renderer
 │     ├─ settings.service.ts     # Preferencias globales
@@ -153,7 +182,7 @@ src/
 │  └─ src/
 │     ├─ main.tsx
 │     ├─ App.tsx
-│     ├─ components/     # ProjectManager, LauncherPanel, EnvironmentSection, …
+│     ├─ components/     # ProjectManager, LauncherPanel, PortsPanel, EnvironmentSection, …
 │     ├─ lib/
 │     └─ styles/
 └─ shared/               # Tipos, canales y constantes compartidas
@@ -189,5 +218,7 @@ el panel «Entorno» con el estado de las herramientas y los puertos. Al elegir
 una carpeta se detecta automáticamente el tipo de proyecto; con el botón
 «Requisitos» de cada proyecto se comprueba si le faltan dependencias y con
 «▶ Iniciar entorno» se arranca la aplicación completa (base de datos, PHP y
-Vite) sin escribir ningún comando. En el desplegable «Diagnóstico del entorno»
+Vite) sin escribir ningún comando. Puedes arrancar varios proyectos a la vez:
+cada uno aparece en «Entornos en marcha» y en «Procesos y puertos», donde se
+detienen de forma individual. En el desplegable «Diagnóstico del entorno»
 puedes probar el canal `app:ping`.

@@ -4,8 +4,9 @@ import PingPanel from './components/PingPanel'
 import ProjectManager from './components/ProjectManager'
 import EnvironmentSection from './components/EnvironmentSection'
 import LauncherPanel from './components/LauncherPanel'
+import PortsPanel from './components/PortsPanel'
 
-/** Vista raíz del MVP: proyectos, verificador de entorno y diagnóstico. */
+/** Vista raíz del MVP: proyectos, entornos, procesos y diagnóstico. */
 function App(): ReactElement {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -16,12 +17,13 @@ function App(): ReactElement {
           </div>
           <div>
             <h1 className="text-2xl font-semibold">DevLauncher</h1>
-            <p className="text-sm text-slate-400">Base del MVP · Electron + React + TypeScript</p>
+            <p className="text-sm text-slate-400">MVP · Electron + React + TypeScript · EP-05</p>
           </div>
         </header>
 
         <ProjectManager />
         <LauncherPanel />
+        <PortsPanel />
         <EnvironmentSection />
 
         <details className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
@@ -34,7 +36,9 @@ function App(): ReactElement {
           </div>
         </details>
 
-        <footer className="text-xs text-slate-500">EP-04 · Motor de automatización</footer>
+        <footer className="text-xs text-slate-500">
+          EP-05 · Administración de procesos y puertos
+        </footer>
       </div>
     </div>
   )

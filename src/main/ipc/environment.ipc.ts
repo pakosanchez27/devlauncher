@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '@shared/constants/channels'
 import type {
   AppSettings,
   EnvironmentReport,
+  PortInspection,
   PortsReport,
   ProjectRequirementsReport
 } from '@shared/types/environment'
@@ -11,6 +12,7 @@ import {
   checkPorts,
   checkProjectRequirements
 } from '../services/environment.service'
+import { inspectPort } from '../services/ports.service'
 import { getSettings, updateSettings } from '../services/settings.service'
 
 /** Handlers IPC del verificador de entorno y de las preferencias globales. */
@@ -24,6 +26,10 @@ export function registerEnvironmentIpcHandlers(): void {
   )
 
   ipcMain.handle(IPC_CHANNELS.ENV_CHECK_PORTS, (): Promise<PortsReport> => checkPorts())
+
+  ipcMain.handle(IPC_CHANNELS.ENV_INSPECT_PORT, (_event, port: number): Promise<PortInspection> =>
+    inspectPort(port)
+  )
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, (): Promise<AppSettings> => getSettings())
 

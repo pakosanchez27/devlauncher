@@ -46,11 +46,31 @@ export interface RequirementCheck {
   hint: string
 }
 
+/** Proceso del sistema que ocupa un puerto. */
+export interface PortOwner {
+  pid: number
+  /** Nombre del ejecutable (p. ej. `node.exe`), si se pudo resolver. */
+  name: string | null
+}
+
 /** Estado de un puerto TCP. */
 export interface PortStatus {
   port: number
   label: string
   available: boolean
+  /** true si DevLauncher tiene el puerto reservado para un entorno suyo. */
+  reservedByUs: boolean
+  /** Proceso que escucha en el puerto, si está ocupado. */
+  owner: PortOwner | null
+}
+
+/** Inspección puntual de un puerto (EP-05). */
+export interface PortInspection {
+  port: number
+  available: boolean
+  /** true si el puerto está reservado por un entorno de DevLauncher. */
+  reservedByUs: boolean
+  owner: PortOwner | null
 }
 
 /** Informe global del entorno. */

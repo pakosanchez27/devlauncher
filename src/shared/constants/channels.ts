@@ -23,13 +23,20 @@ export const IPC_CHANNELS = {
   ENV_CHECK: 'env:check',
   ENV_CHECK_PROJECT: 'env:check-project',
   ENV_CHECK_PORTS: 'env:check-ports',
+  /** Inspección de un puerto concreto, con el proceso que lo ocupa (EP-05). */
+  ENV_INSPECT_PORT: 'env:inspect-port',
   SETTINGS_GET: 'settings:get',
   SETTINGS_UPDATE: 'settings:update',
 
-  // Motor de automatización (EP-04)
+  // Motor de automatización (EP-04) y gestor de procesos (EP-05)
   LAUNCHER_START: 'launcher:start',
+  /** Detiene un entorno concreto (projectId) o todos si se omite. */
   LAUNCHER_STOP: 'launcher:stop',
+  /** Detiene un único servicio gestionado. */
+  LAUNCHER_STOP_SERVICE: 'launcher:stop-service',
   LAUNCHER_STATUS: 'launcher:status',
+  /** Procesos gestionados (activos e histórico reciente). */
+  LAUNCHER_PROCESSES: 'launcher:processes',
   /** Canal de solo emisión: main → renderer (progreso y logs del arranque). */
   LAUNCHER_EVENT: 'launcher:event'
 } as const

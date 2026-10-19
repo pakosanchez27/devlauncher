@@ -2,11 +2,12 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { frameworkLabel } from '@shared/constants/frameworks'
 import type {
-  LaunchServiceStatus,
+  LaunchPorts,
   LaunchSession,
   LaunchStep,
   LaunchStepId,
-  LaunchStepState
+  LaunchStepState,
+  ManagedProcessInfo
 } from '@shared/types/launcher'
 import type { Project } from '@shared/types/project'
 import {
@@ -16,17 +17,24 @@ import {
 } from './environment.service'
 import { broadcastLauncherEvent } from './events'
 import {
+  allocatePort,
+  isPortReserved,
+  releasePort,
+  releasePortsOf,
+  reservePort
+} from './ports.service'
+import {
   getManagedProcess,
   spawnDetached,
   startManagedProcess,
   stopManagedProcess
 } from './process.service'
 import { readProjects } from './project.repository'
-import { delay, findFreePort, isPortOpen, waitForHttp, waitForPort } from './readiness'
+import { delay, isPortAvailable, isPortOpen, waitForHttp, waitForPort } from './readiness'
 import { getSettings } from './settings.service'
 
 /**
- * Motor de automatización (EP-04).
+ * Motor de automatización (EP-04) y gestor de entornos (EP-05).
  *
  * Arranca el entorno de un proyecto Laravel con un solo paso, en orden y
  * comprobando que cada servicio quede listo:
@@ -35,6 +43,9 @@ import { getSettings } from './settings.service'
  *   2. Base de datos: arranca WampServer/MySQL solo si no está ya en marcha.
  *   3. `php artisan serve` en un puerto libre, esperando a que responda.
  *   4. `npm run dev` si el proyecto usa Vite, esperando su URL.
+ *
+ * Puede haber varios entornos en marcha a la vez. Cada uno tiene su sesión y
+ * sus puertos reservados, de modo que dos proyectos nunca chocan entre sí.
  */
 
 const DB_DEFAULT_PORT = 3306
@@ -51,26 +62,44 @@ interface PackageJsonLike {
   devDependencies?: Record<string, string>
 }
 
-/** Única sesión de arranque activa (el MVP arranca un entorno a la vez). */
-let session: LaunchSession | null = null
-let starting = false
+/** Sesiones de arranque por proyecto (EP-05 permite varias a la vez). */
+const sessions = new Map<string, LaunchSession>()
+/** Proyectos cuyo arranque está en curso (evita arranques duplicados). */
+const starting = new Set<string>()
+/** Proyectos cuyo arranque el usuario canceló mientras estaba en curso. */
+const cancelled = new Set<string>()
+/** Arranques de MySQL en curso por puerto (varios entornos pueden esperar). */
+const databaseStartups = new Map<number, Promise<boolean>>()
 
-function broadcastSession(): void {
-  if (session) broadcastLauncherEvent({ type: 'session', session })
+function broadcastSession(session: LaunchSession): void {
+  broadcastLauncherEvent({ type: 'session', session })
 }
 
-function setStep(id: LaunchStepId, state: LaunchStepState, message: string): void {
-  const step = session?.steps.find((candidate) => candidate.id === id)
+function setStep(
+  session: LaunchSession,
+  id: LaunchStepId,
+  state: LaunchStepState,
+  message: string
+): void {
+  const step = session.steps.find((candidate) => candidate.id === id)
   if (!step) return
   step.state = state
   step.message = message
-  broadcastSession()
+  broadcastSession(session)
 }
 
-function markService(id: string, status: LaunchServiceStatus): void {
-  const service = session?.services.find((candidate) => candidate.id === id)
+function markService(
+  session: LaunchSession,
+  id: string,
+  status: 'running' | 'stopped' | 'failed'
+): void {
+  const service = session.services.find((candidate) => candidate.id === id)
   if (service) service.status = status
-  broadcastSession()
+}
+
+/** Propietario de la reserva de puertos de un servicio de la sesión. */
+function portOwner(projectId: string, kind: 'php' | 'vite'): string {
+  return `${projectId}:${kind}`
 }
 
 async function readJson<T>(file: string): Promise<T | null> {
@@ -124,6 +153,7 @@ async function usesViteDevServer(projectPath: string): Promise<boolean> {
 
 /** Espera a que un proceso gestionado deje el servicio listo (o se caiga antes). */
 async function waitForService(
+  projectId: string,
   serviceId: string,
   check: () => Promise<boolean>,
   timeoutMs: number
@@ -131,6 +161,7 @@ async function waitForService(
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (await check()) return true
+    if (cancelled.has(projectId)) return false
     const process = getManagedProcess(serviceId)
     if (process && process.status !== 'running') return false
     await delay(300)
@@ -138,11 +169,49 @@ async function waitForService(
   return false
 }
 
-async function runRequirementsStep(project: Project): Promise<boolean> {
-  setStep('requirements', 'running', 'Comprobando requisitos del proyecto…')
+/**
+ * Reacciona a la caída inesperada de un servicio ya listo: marca la sesión
+ * como fallida y libera su puerto. Si el proceso lo paramos nosotros, no hace
+ * nada.
+ */
+function handleUnexpectedExit(
+  session: LaunchSession,
+  serviceId: string,
+  kind: 'php' | 'vite',
+  port: number | null,
+  owner: string
+): void {
+  if (port !== null) releasePort(port, owner)
+  if (kind === 'php' && session.ports.app === port) session.ports.app = null
+  if (kind === 'vite' && session.ports.vite === port) session.ports.vite = null
+
+  const managed = getManagedProcess(serviceId)
+  if (!managed || managed.status === 'stopped') return
+
+  markService(session, serviceId, 'failed')
+
+  // Durante el arranque, el propio flujo de pasos informa del fallo.
+  if (session.state !== 'ready') {
+    broadcastSession(session)
+    return
+  }
+
+  const message = `El servicio «${managed.label}» se detuvo inesperadamente (código ${
+    managed.exitCode ?? 'desconocido'
+  }).`
+  setStep(session, kind, 'failed', message)
+  session.state = 'failed'
+  session.error = message
+  session.finishedAt = new Date().toISOString()
+  broadcastSession(session)
+}
+
+async function runRequirementsStep(session: LaunchSession, project: Project): Promise<boolean> {
+  setStep(session, 'requirements', 'running', 'Comprobando requisitos del proyecto…')
 
   if (project.framework !== 'laravel') {
     setStep(
+      session,
       'requirements',
       'failed',
       `El motor del MVP arranca proyectos Laravel. Este se detectó como ${frameworkLabel(
@@ -155,6 +224,7 @@ async function runRequirementsStep(project: Project): Promise<boolean> {
   const report = await checkProjectRequirements(project.path)
   if (report.missing.length > 0) {
     setStep(
+      session,
       'requirements',
       'failed',
       `Faltan requisitos obligatorios: ${report.missing.join(', ')}.`
@@ -162,29 +232,35 @@ async function runRequirementsStep(project: Project): Promise<boolean> {
     return false
   }
 
-  setStep('requirements', 'ready', 'artisan, composer.json y vendor/ presentes.')
+  setStep(session, 'requirements', 'ready', 'artisan, composer.json y vendor/ presentes.')
   return true
 }
 
-async function runDatabaseStep(project: Project): Promise<boolean> {
-  setStep('database', 'running', 'Comprobando la base de datos…')
+async function runDatabaseStep(session: LaunchSession, project: Project): Promise<boolean> {
+  setStep(session, 'database', 'running', 'Comprobando la base de datos…')
 
   const env = await readEnvFile(join(project.path, '.env'))
   const connection = (env.DB_CONNECTION ?? 'mysql').toLowerCase()
   if (connection === 'sqlite') {
-    setStep('database', 'skipped', 'El proyecto usa SQLite: no necesita servidor de base de datos.')
+    setStep(
+      session,
+      'database',
+      'skipped',
+      'El proyecto usa SQLite: no necesita servidor de base de datos.'
+    )
     return true
   }
 
   const port = Number(env.DB_PORT) || DB_DEFAULT_PORT
   if (await isPortOpen(port)) {
-    setStep('database', 'ready', `MySQL ya está escuchando en el puerto ${port}.`)
+    setStep(session, 'database', 'ready', `MySQL ya está escuchando en el puerto ${port}.`)
     return true
   }
 
   const wamp = await detectWampServer(await getSettings())
   if (!wamp.installed || !wamp.path) {
     setStep(
+      session,
       'database',
       'failed',
       `Nada escucha en el puerto ${port} y no se encontró WampServer. Arráncalo manualmente o configura su ruta en «Entorno».`
@@ -192,11 +268,30 @@ async function runDatabaseStep(project: Project): Promise<boolean> {
     return false
   }
 
-  setStep('database', 'running', `MySQL no responde; iniciando WampServer (${wamp.path})…`)
-  spawnDetached(join(wamp.path, 'wampmanager.exe'), [], wamp.path)
+  const wampPath = wamp.path
 
-  if (!(await waitForPort(port, '127.0.0.1', DB_TIMEOUT))) {
+  // Varios entornos pueden necesitar MySQL a la vez: se arranca una sola vez y
+  // el resto espera al mismo arranque en lugar de lanzar WampServer en paralelo.
+  let startup = databaseStartups.get(port)
+  if (startup) {
+    setStep(session, 'database', 'running', `Esperando a que MySQL arranque en el puerto ${port}…`)
+  } else {
     setStep(
+      session,
+      'database',
+      'running',
+      `MySQL no responde; iniciando WampServer (${wampPath})…`
+    )
+    startup = (async (): Promise<boolean> => {
+      spawnDetached(join(wampPath, 'wampmanager.exe'), [], wampPath)
+      return waitForPort(port, '127.0.0.1', DB_TIMEOUT)
+    })().finally(() => databaseStartups.delete(port))
+    databaseStartups.set(port, startup)
+  }
+
+  if (!(await startup)) {
+    setStep(
+      session,
       'database',
       'failed',
       `WampServer se lanzó pero MySQL no respondió en el puerto ${port} (30 s).`
@@ -204,79 +299,126 @@ async function runDatabaseStep(project: Project): Promise<boolean> {
     return false
   }
 
-  setStep('database', 'ready', `WampServer iniciado; MySQL escuchando en el puerto ${port}.`)
+  setStep(
+    session,
+    'database',
+    'ready',
+    `WampServer iniciado; MySQL escuchando en el puerto ${port}.`
+  )
   return true
 }
 
-async function runPhpStep(project: Project): Promise<boolean> {
-  setStep('php', 'running', 'Localizando PHP…')
+async function runPhpStep(session: LaunchSession, project: Project): Promise<boolean> {
+  setStep(session, 'php', 'running', 'Localizando PHP…')
 
   const php = await resolveExecutable('php')
   if (!php.available || !php.path) {
-    setStep('php', 'failed', 'No se encontró PHP. Configúralo en el panel «Entorno».')
+    setStep(session, 'php', 'failed', 'No se encontró PHP. Configúralo en el panel «Entorno».')
     return false
   }
 
-  const port = await findFreePort(APP_PORT_START)
-  setStep('php', 'running', `Ejecutando php artisan serve en el puerto ${port}…`)
+  setStep(session, 'php', 'running', 'Buscando un puerto libre…')
+  const owner = portOwner(project.id, 'php')
+  const port = await allocatePort(APP_PORT_START, owner)
+  if (port === null) {
+    setStep(
+      session,
+      'php',
+      'failed',
+      `No hay puertos libres entre ${APP_PORT_START} y ${APP_PORT_START + 19}.`
+    )
+    return false
+  }
+  session.ports.app = port
 
+  setStep(session, 'php', 'running', `Ejecutando php artisan serve en el puerto ${port}…`)
+
+  let serviceId: string | null = null
   const service = startManagedProcess({
     projectId: project.id,
+    projectPath: project.path,
     kind: 'php',
     label: 'Laravel (artisan serve)',
     command: php.path,
     args: ['artisan', 'serve', '--host=127.0.0.1', `--port=${port}`],
-    cwd: project.path
+    cwd: project.path,
+    ports: [port],
+    onExit: () => {
+      if (serviceId) handleUnexpectedExit(session, serviceId, 'php', port, owner)
+    }
   })
+  serviceId = service.id
 
-  const current = session
-  if (!current) return false
-  current.services.push({
+  session.services.push({
     id: service.id,
     kind: 'php',
     label: service.label,
     status: 'running',
     pid: service.pid,
+    ports: [port],
     startedAt: service.startedAt
   })
-  broadcastSession()
+  broadcastSession(session)
 
   const url = `http://127.0.0.1:${port}`
-  const ready = await waitForService(service.id, () => isPortOpen(port), PHP_TIMEOUT)
+  const ready = await waitForService(project.id, service.id, () => isPortOpen(port), PHP_TIMEOUT)
   if (!ready) {
     await stopManagedProcess(service.id)
-    markService(service.id, 'failed')
-    setStep('php', 'failed', 'El servidor PHP no respondió a tiempo. Revisa la salida del proceso.')
+    releasePort(port, owner)
+    session.ports.app = null
+    markService(session, service.id, 'failed')
+    if (!cancelled.has(project.id)) {
+      setStep(
+        session,
+        'php',
+        'failed',
+        'El servidor PHP no respondió a tiempo. Revisa la salida del proceso.'
+      )
+    }
     return false
   }
 
   // Confirmación HTTP (mejor esfuerzo): que realmente sirva la aplicación.
   await waitForHttp(url, 5000)
 
-  current.urls.app = url
-  setStep('php', 'ready', `Aplicación disponible en ${url}`)
-  broadcastSession()
+  session.urls.app = url
+  setStep(session, 'php', 'ready', `Aplicación disponible en ${url}`)
+  broadcastSession(session)
   return true
 }
 
-async function runViteStep(project: Project): Promise<boolean> {
+async function runViteStep(session: LaunchSession, project: Project): Promise<boolean> {
   if (!(await usesViteDevServer(project.path))) {
-    setStep('vite', 'skipped', 'El proyecto no usa Vite: no hace falta compilar el frontend.')
+    setStep(
+      session,
+      'vite',
+      'skipped',
+      'El proyecto no usa Vite: no hace falta compilar el frontend.'
+    )
     return true
   }
 
-  setStep('vite', 'running', 'Localizando npm…')
+  setStep(session, 'vite', 'running', 'Localizando npm…')
   const npm = await resolveExecutable('npm')
   if (!npm.available || !npm.path) {
-    setStep('vite', 'failed', 'No se encontró npm. Configúralo en el panel «Entorno».')
+    setStep(session, 'vite', 'failed', 'No se encontró npm. Configúralo en el panel «Entorno».')
     return false
   }
 
-  setStep('vite', 'running', 'Ejecutando npm run dev…')
+  setStep(session, 'vite', 'running', 'Ejecutando npm run dev…')
 
+  const owner = portOwner(project.id, 'vite')
   const captured: { url: string | null } = { url: null }
+
+  // Si el 5173 está libre se reserva ya; si lo ocupa otro entorno, Vite elegirá
+  // otro puerto y solo se dará por listo cuando anuncie su URL.
+  const preferredFree = !isPortReserved(VITE_PORT) && (await isPortAvailable(VITE_PORT))
+  if (preferredFree) reservePort(VITE_PORT, owner)
+
+  let serviceId: string | null = null
   const service = startManagedProcess({
     projectId: project.id,
+    projectPath: project.path,
     kind: 'vite',
     label: 'Vite (npm run dev)',
     command: npm.path,
@@ -285,69 +427,160 @@ async function runViteStep(project: Project): Promise<boolean> {
     onLine: (line) => {
       const match = line.match(/Local:\s+(https?:\/\/[^\s]+)/i)
       if (match && !captured.url) captured.url = match[1].replace(/\/+$/, '')
+    },
+    onExit: () => {
+      if (serviceId) handleUnexpectedExit(session, serviceId, 'vite', session.ports.vite, owner)
     }
   })
+  serviceId = service.id
 
-  const current = session
-  if (!current) return false
-  current.services.push({
+  session.services.push({
     id: service.id,
     kind: 'vite',
     label: service.label,
     status: 'running',
     pid: service.pid,
+    ports: [],
     startedAt: service.startedAt
   })
-  broadcastSession()
+  broadcastSession(session)
 
   const ready = await waitForService(
+    project.id,
     service.id,
-    async () => Boolean(captured.url) || (await isPortOpen(VITE_PORT)),
+    async () => Boolean(captured.url) || (preferredFree && (await isPortOpen(VITE_PORT))),
     VITE_TIMEOUT
   )
   if (!ready) {
     await stopManagedProcess(service.id)
-    markService(service.id, 'failed')
-    setStep('vite', 'failed', 'Vite no arrancó a tiempo. Revisa la salida del proceso.')
+    releasePort(VITE_PORT, owner)
+    markService(session, service.id, 'failed')
+    if (!cancelled.has(project.id)) {
+      setStep(session, 'vite', 'failed', 'Vite no arrancó a tiempo. Revisa la salida del proceso.')
+    }
     return false
   }
 
   const url = captured.url ?? `http://localhost:${VITE_PORT}`
-  current.urls.vite = url
-  setStep('vite', 'ready', `Servidor de Vite disponible en ${url}`)
-  broadcastSession()
+  const vitePort = Number(new URL(url).port) || VITE_PORT
+  if (vitePort !== VITE_PORT) {
+    releasePort(VITE_PORT, owner)
+    if (!isPortReserved(vitePort)) reservePort(vitePort, owner)
+  }
+  session.ports.vite = vitePort
+  const viteService = session.services.find((candidate) => candidate.id === service.id)
+  if (viteService) viteService.ports = [vitePort]
+
+  session.urls.vite = url
+  setStep(session, 'vite', 'ready', `Servidor de Vite disponible en ${url}`)
+  broadcastSession(session)
   return true
 }
 
-async function stopSessionServices(): Promise<void> {
-  const current = session
-  if (!current) return
-  for (const service of current.services) {
+/** Detiene los servicios vivos de una sesión y libera sus puertos. */
+async function stopSessionServices(session: LaunchSession): Promise<void> {
+  for (const service of session.services) {
     if (service.status !== 'running') continue
     await stopManagedProcess(service.id)
     service.status = 'stopped'
   }
-  broadcastSession()
+
+  releasePortsOf(portOwner(session.projectId, 'php'))
+  releasePortsOf(portOwner(session.projectId, 'vite'))
+  session.ports = { app: null, vite: null }
+  broadcastSession(session)
 }
 
-/** Devuelve la sesión de arranque actual (o null si nunca se arrancó nada). */
-export function getLaunchSession(): LaunchSession | null {
-  return session
+/** Devuelve todas las sesiones de arranque (la más reciente primero). */
+export function getLaunchSessions(): LaunchSession[] {
+  return [...sessions.values()].sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))
+}
+
+/** Devuelve la sesión de un proyecto, si existe. */
+export function getLaunchSession(projectId: string): LaunchSession | null {
+  return sessions.get(projectId) ?? null
+}
+
+/** Detiene un servicio concreto y actualiza su sesión. */
+export async function stopServiceProcess(serviceId: string): Promise<ManagedProcessInfo | null> {
+  const processInfo = getManagedProcess(serviceId)
+  if (!processInfo) throw new Error('El proceso no existe o ya ha terminado.')
+
+  const session = sessions.get(processInfo.projectId)
+  await stopManagedProcess(serviceId)
+
+  if (session) {
+    markService(session, serviceId, 'stopped')
+
+    if (processInfo.kind === 'php') {
+      if (processInfo.ports[0] !== undefined) {
+        releasePort(processInfo.ports[0], portOwner(session.projectId, 'php'))
+      }
+      session.ports.app = null
+      session.urls.app = null
+    }
+
+    if (processInfo.kind === 'vite') {
+      if (processInfo.ports[0] !== undefined) {
+        releasePort(processInfo.ports[0], portOwner(session.projectId, 'vite'))
+      }
+      session.ports.vite = null
+      session.urls.vite = null
+    }
+
+    if (!session.services.some((service) => service.status === 'running')) {
+      session.state = 'stopped'
+      session.finishedAt = new Date().toISOString()
+    }
+    broadcastSession(session)
+  }
+
+  return getManagedProcess(serviceId)
+}
+
+async function stopSession(session: LaunchSession): Promise<void> {
+  if (session.state === 'starting') cancelled.add(session.projectId)
+
+  await stopSessionServices(session)
+  for (const step of session.steps) {
+    if (step.state === 'running') step.state = 'pending'
+  }
+  session.state = 'stopped'
+  session.finishedAt = new Date().toISOString()
+  broadcastSession(session)
+}
+
+/**
+ * Detiene el entorno de un proyecto (o todos si se omite `projectId`).
+ * Devuelve las sesiones afectadas.
+ */
+export async function stopProjectEnvironment(projectId?: string): Promise<LaunchSession[]> {
+  const targets = projectId ? [sessions.get(projectId)] : [...sessions.values()]
+  const existing = targets.filter((session): session is LaunchSession => Boolean(session))
+  await Promise.all(existing.map((session) => stopSession(session)))
+  return existing
 }
 
 /** Arranca el entorno de un proyecto con el orden y las comprobaciones de EP-04. */
 export async function startProjectEnvironment(projectId: string): Promise<LaunchSession> {
-  if (starting) throw new Error('Ya se está arrancando un entorno. Espera a que termine.')
+  if (starting.has(projectId)) {
+    throw new Error('El entorno de este proyecto ya se está arrancando.')
+  }
+
+  const current = sessions.get(projectId)
+  if (current && (current.state === 'starting' || current.state === 'ready')) {
+    throw new Error(`El entorno de «${current.projectName}» ya está en marcha.`)
+  }
 
   const project = (await readProjects()).find((candidate) => candidate.id === projectId)
   if (!project) throw new Error('El proyecto no existe.')
 
-  starting = true
-  try {
-    // El MVP arranca un entorno a la vez: se detiene el anterior si seguía vivo.
-    if (session) await stopProjectEnvironment()
+  starting.add(projectId)
+  cancelled.delete(projectId)
 
-    const current: LaunchSession = {
+  try {
+    const ports: LaunchPorts = { app: null, vite: null }
+    const session: LaunchSession = {
       projectId: project.id,
       projectName: project.name,
       projectPath: project.path,
@@ -364,49 +597,63 @@ export async function startProjectEnvironment(projectId: string): Promise<Launch
         { id: 'vite', label: 'Servidor Vite (npm run dev)', state: 'pending', message: '' }
       ] satisfies LaunchStep[],
       services: [],
+      ports,
       urls: { app: null, vite: null },
       startedAt: new Date().toISOString(),
       finishedAt: null,
       error: null
     }
-    session = current
-    broadcastSession()
+    sessions.set(projectId, session)
+    broadcastSession(session)
 
-    if (await runRequirementsStep(project)) {
-      if (await runDatabaseStep(project)) {
-        if (await runPhpStep(project)) {
-          await runViteStep(project)
+    try {
+      if (!cancelled.has(projectId) && (await runRequirementsStep(session, project))) {
+        if (!cancelled.has(projectId) && (await runDatabaseStep(session, project))) {
+          if (!cancelled.has(projectId) && (await runPhpStep(session, project))) {
+            if (!cancelled.has(projectId)) await runViteStep(session, project)
+          }
         }
+      }
+    } catch (cause) {
+      // Cualquier excepción inesperada deja la sesión en error y sin procesos.
+      const message =
+        cause instanceof Error ? cause.message : 'Error inesperado al arrancar el entorno.'
+      const runningStep = session.steps.find((step) => step.state === 'running')
+      if (runningStep) {
+        runningStep.state = 'failed'
+        runningStep.message = message
+      }
+      session.state = 'failed'
+      session.error = message
+      await stopSessionServices(session)
+    }
+
+    if (cancelled.has(projectId)) {
+      // La parada ya actualizó la sesión; solo se limpian los fallos derivados.
+      for (const step of session.steps) {
+        if (step.state === 'failed') {
+          step.state = 'pending'
+          step.message = ''
+        }
+      }
+      session.error = null
+      session.state = 'stopped'
+    } else if (session.state !== 'failed') {
+      const failedStep = session.steps.find((step) => step.state === 'failed')
+      if (failedStep) {
+        session.state = 'failed'
+        session.error = failedStep.message
+        await stopSessionServices(session)
+      } else {
+        session.state = 'ready'
       }
     }
 
-    const failedStep = current.steps.find((step) => step.state === 'failed')
-    if (failedStep) {
-      current.state = 'failed'
-      current.error = failedStep.message
-      await stopSessionServices()
-    } else {
-      current.state = 'ready'
-    }
-
-    current.finishedAt = new Date().toISOString()
-    broadcastSession()
-    return current
+    session.finishedAt = new Date().toISOString()
+    broadcastSession(session)
+    return session
   } finally {
-    starting = false
+    starting.delete(projectId)
+    cancelled.delete(projectId)
   }
-}
-
-/** Detiene el entorno en marcha (procesos PHP/Vite iniciados por el motor). */
-export async function stopProjectEnvironment(): Promise<LaunchSession | null> {
-  if (!session) return null
-
-  await stopSessionServices()
-  for (const step of session.steps) {
-    if (step.state === 'running') step.state = 'pending'
-  }
-  session.state = 'stopped'
-  session.finishedAt = new Date().toISOString()
-  broadcastSession()
-  return session
 }

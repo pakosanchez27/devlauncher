@@ -1,10 +1,12 @@
 /**
- * Contratos del motor de automatización (EP-04).
+ * Contratos del motor de automatización (EP-04) y de su gestor de procesos y
+ * puertos (EP-05).
  *
  * El motor arranca el entorno de un proyecto Laravel de forma ordenada:
  * comprueba requisitos → asegura la base de datos → `php artisan serve` →
- * `npm run dev` (si el proyecto usa Vite). Compartido entre main, preload y
- * renderer.
+ * `npm run dev` (si el proyecto usa Vite). Puede haber varios entornos en
+ * marcha a la vez, cada uno con su propia sesión. Compartido entre main,
+ * preload y renderer.
  */
 
 /** Pasos del arranque ordenado. */
@@ -28,6 +30,12 @@ export type LaunchServiceKind = 'wamp' | 'php' | 'vite'
 /** Estado de un servicio gestionado. */
 export type LaunchServiceStatus = 'running' | 'stopped' | 'failed'
 
+/** Puertos asignados a una sesión de arranque. */
+export interface LaunchPorts {
+  app: number | null
+  vite: number | null
+}
+
 /** Servicio en ejecución asociado a una sesión de arranque. */
 export interface LaunchService {
   id: string
@@ -36,6 +44,8 @@ export interface LaunchService {
   status: LaunchServiceStatus
   /** Identificador del proceso del sistema (null si no se pudo obtener). */
   pid: number | null
+  /** Puertos que ocupa el servicio. */
+  ports: number[]
   startedAt: string
 }
 
@@ -48,6 +58,8 @@ export interface ManagedProcessInfo {
   /** Línea de comando completa, tal como se ejecutó. */
   command: string
   pid: number | null
+  /** Puertos reservados para este proceso. */
+  ports: number[]
   status: LaunchServiceStatus
   startedAt: string
   exitCode: number | null
@@ -64,6 +76,8 @@ export interface LaunchSession {
   state: LaunchState
   steps: LaunchStep[]
   services: LaunchService[]
+  /** Puertos asignados a la aplicación y a Vite. */
+  ports: LaunchPorts
   /** URL de la aplicación (artisan serve) y del servidor Vite, si están listos. */
   urls: { app: string | null; vite: string | null }
   startedAt: string | null

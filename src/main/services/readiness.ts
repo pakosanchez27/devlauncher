@@ -10,8 +10,8 @@ export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** true si el puerto está libre (nadie escucha en él). */
-export function isPortAvailable(port: number, host = '127.0.0.1'): Promise<boolean> {
+/** Intenta abrir un servidor en el puerto; false si el sistema lo impide. */
+function canBind(port: number, host: string): Promise<boolean> {
   return new Promise((resolve) => {
     const server = createServer()
     server.once('error', () => resolve(false))
@@ -20,6 +20,17 @@ export function isPortAvailable(port: number, host = '127.0.0.1'): Promise<boole
     })
     server.listen(port, host)
   })
+}
+
+/**
+ * true si el puerto está libre (nadie escucha en él).
+ *
+ * En Windows `SO_REUSEADDR` puede permitir el bind aunque otro proceso esté
+ * escuchando, así que se confirma con una conexión real al puerto.
+ */
+export async function isPortAvailable(port: number, host = '127.0.0.1'): Promise<boolean> {
+  if (!(await canBind(port, host))) return false
+  return !(await isPortOpen(port, host, 500))
 }
 
 /** true si hay algo escuchando en el puerto (intento de conexión puntual). */

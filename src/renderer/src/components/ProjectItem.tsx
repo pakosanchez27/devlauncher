@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReactElement } from 'react'
 import { frameworkLabel } from '@shared/constants/frameworks'
+import type { LaunchState } from '@shared/types/launcher'
 import type { Project } from '@shared/types/project'
 import { frameworkBadgeClass } from '../lib/framework-colors'
 import ProjectRequirements from './ProjectRequirements'
@@ -8,7 +9,10 @@ import ProjectRequirements from './ProjectRequirements'
 interface ProjectItemProps {
   project: Project
   busy: boolean
+  /** Estado del entorno del proyecto (si nunca se arrancó, undefined). */
+  launchState: LaunchState | undefined
   onLaunch: (project: Project) => void
+  onStop: (project: Project) => void
   onOpen: (project: Project) => void
   onRename: (id: string, name: string) => void
   onDelete: (project: Project) => void
@@ -18,7 +22,9 @@ interface ProjectItemProps {
 function ProjectItem({
   project,
   busy,
+  launchState,
   onLaunch,
+  onStop,
   onOpen,
   onRename,
   onDelete
@@ -37,6 +43,9 @@ function ProjectItem({
     if (name && name !== project.name) onRename(project.id, name)
     setEditing(false)
   }
+
+  const isStarting = launchState === 'starting'
+  const isRunning = launchState === 'ready' || isStarting
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
@@ -75,13 +84,23 @@ function ProjectItem({
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
-          <button
-            onClick={() => onLaunch(project)}
-            disabled={busy}
-            className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-400 disabled:opacity-50"
-          >
-            ▶ Iniciar entorno
-          </button>
+          {isRunning ? (
+            <button
+              onClick={() => onStop(project)}
+              disabled={busy || isStarting}
+              className="rounded-lg border border-red-800/60 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:border-red-500 disabled:opacity-50"
+            >
+              {isStarting ? 'Arrancando…' : '■ Detener entorno'}
+            </button>
+          ) : (
+            <button
+              onClick={() => onLaunch(project)}
+              disabled={busy}
+              className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-400 disabled:opacity-50"
+            >
+              ▶ Iniciar entorno
+            </button>
+          )}
           <button
             onClick={() => onOpen(project)}
             disabled={busy}
