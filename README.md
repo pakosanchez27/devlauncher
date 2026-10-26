@@ -2,7 +2,7 @@
 
 Lanzador de escritorio para proyectos PHP y JavaScript en Windows.
 
-> **Estado:** EP-10 (Compatibilidad de frameworks) — Laravel, CodeIgniter, Symfony, WordPress, Next.js, React, Vue y Node.js.
+> **Estado:** EP-11 (Empaquetado) — instalador NSIS y versión portable para Windows.
 
 ## Stack
 
@@ -228,6 +228,36 @@ Detalles:
 - Un framework sin plan (tipo no reconocido) falla en el primer paso con un
   mensaje que explica qué falta, y no se queda ningún proceso vivo.
 
+## Empaquetado y distribución (EP-11)
+
+`npm run dist` compila la aplicación y genera en `dist/` los artefactos para
+Windows x64:
+
+| Artefacto                      | Descripción                                                               |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `DevLauncher-<v>-setup.exe`    | Instalador NSIS por usuario (sin permisos de administrador)               |
+| `DevLauncher-<v>-portable.exe` | Ejecutable portable: no instala nada y se extrae a una carpeta temporal   |
+| `latest.yml`                   | Metadatos del build (versión, tamaño y hash) para futuras actualizaciones |
+| `win-unpacked/`                | Aplicación sin empaquetar, útil para depurar el ejecutable                |
+
+Detalles:
+
+- La configuración está en `electron-builder.yml` y el icono en
+  `build/icon.ico` (16, 24, 32, 48, 64, 128 y 256 px).
+- El `appId` es `com.devlauncher.app`, el mismo que usa
+  `electronApp.setAppUserModelId` para que las notificaciones y la barra de
+  tareas de Windows asocien la ventana con la aplicación.
+- Solo se empaqueta `out/` y `package.json` dentro de un archivo `asar`: el
+  código fuente, los tests y las herramientas de desarrollo no viajan.
+- `npm run pack` genera únicamente `dist/win-unpacked/`, más rápido para probar
+  el ejecutable empaquetado.
+- No hay firma de código configurada: Windows SmartScreen mostrará un aviso la
+  primera vez que se ejecute el instalador.
+- Los datos de la aplicación (`projects.json`, `settings.json`,
+  `processes.json`) se guardan en `%APPDATA%\DevLauncher` en la versión
+  empaquetada y en `%APPDATA%\devlauncher` en desarrollo, de modo que el
+  catálogo de desarrollo no aparece en la aplicación instalada.
+
 ## Estructura
 
 ```
@@ -267,6 +297,11 @@ src/
    └─ types/
 ```
 
+Archivos de configuración y recursos, fuera de `src/`:
+
+- `electron-builder.yml` — empaquetado y distribución (EP-11).
+- `build/icon.ico` — icono de la aplicación (16–256 px).
+
 ### Alias de importación
 
 - `@shared/*` → `src/shared/*` (disponible en main, preload y renderer)
@@ -274,14 +309,16 @@ src/
 
 ## Scripts
 
-| Script              | Descripción                                |
-| ------------------- | ------------------------------------------ |
-| `npm run dev`       | Inicia la app en modo desarrollo (con HMR) |
-| `npm run build`     | Verifica tipos y compila a `out/`          |
-| `npm start`         | Previsualiza la build compilada            |
-| `npm run typecheck` | Comprueba tipos de Node y del renderer     |
-| `npm run lint`      | Ejecuta ESLint                             |
-| `npm run format`    | Formatea con Prettier                      |
+| Script              | Descripción                                     |
+| ------------------- | ----------------------------------------------- |
+| `npm run dev`       | Inicia la app en modo desarrollo (con HMR)      |
+| `npm run build`     | Verifica tipos y compila a `out/`               |
+| `npm run pack`      | Empaqueta sin instalador (`dist/win-unpacked/`) |
+| `npm run dist`      | Genera el instalador y la versión portable      |
+| `npm start`         | Previsualiza la build compilada                 |
+| `npm run typecheck` | Comprueba tipos de Node y del renderer          |
+| `npm run lint`      | Ejecuta ESLint                                  |
+| `npm run format`    | Formatea con Prettier                           |
 
 ## Primer arranque
 
@@ -299,3 +336,7 @@ aplica) sin escribir ningún comando. Puedes arrancar varios proyectos a la vez:
 cada uno se actualiza en su tarjeta y aparece también en «Entornos en marcha» y
 «Procesos y puertos», donde se detienen de forma individual. En el desplegable
 «Diagnóstico del entorno» puedes probar el canal `app:ping`.
+
+Para generar el instalador, ejecuta `npm run dist` y abre
+`dist/DevLauncher-0.1.0-setup.exe` (o la versión portable, que no requiere
+instalación).

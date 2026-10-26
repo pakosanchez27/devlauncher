@@ -1,0 +1,59 @@
+# Configuración de empaquetado (EP-11).
+#
+# `npm run dist` compila con electron-vite y genera en `dist/`:
+#   - un instalador NSIS (DevLauncher-<versión>-setup.exe)
+#   - una versión portable (DevLauncher-<versión>-portable.exe)
+#
+# `npm run pack` hace lo mismo sin instalador, en `dist/win-unpacked/`, para
+# probar rápido el ejecutable empaquetado.
+
+appId: com.devlauncher.app
+productName: DevLauncher
+copyright: Copyright © 2026 Francisco Javier Sánchez Tirado
+
+directories:
+  buildResources: build
+  output: dist
+
+# Solo se empaqueta lo compilado y el manifiesto; el código fuente y las
+# herramientas de desarrollo no viajan en la aplicación.
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!build/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{eslint.config.mjs,.prettierrc,.prettierignore,.editorconfig}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{README.md,package-lock.json}'
+
+asar: true
+
+# No hay dependencias nativas que recompilar.
+npmRebuild: false
+
+win:
+  executableName: DevLauncher
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DevLauncher
+  uninstallDisplayName: DevLauncher
+  artifactName: ${productName}-${version}-setup.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
