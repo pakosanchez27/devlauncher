@@ -52,9 +52,17 @@ const MAX_LOG_LINES = 400
 const ORPHAN_TOLERANCE_MS = 15000
 /** Los procesos terminados se conservan un rato para poder consultarlos. */
 const STOPPED_RETENTION_MS = 10 * 60 * 1000
+/** Secuencias ANSI (colores) que algunos programas emiten aunque la salida sea una tubería. */
+// eslint-disable-next-line no-control-regex -- \u001B es el inicio de una secuencia ANSI
+const ANSI_PATTERN = new RegExp('\\u001B\\[[0-?]*[ -/]*[@-~]', 'g')
 
 const registry = new Map<string, ManagedProcessInternal>()
 let persistQueue: Promise<void> = Promise.resolve()
+
+/** Quita los códigos de color para poder analizar la línea (p. ej. la URL de Vite). */
+function stripAnsi(line: string): string {
+  return line.replace(ANSI_PATTERN, '')
+}
 
 function quote(token: string): string {
   return /\s/.test(token) ? `"${token}"` : token
@@ -143,26 +151,45 @@ export function startManagedProcess(options: StartProcessOptions): ManagedProces
   }
   registry.set(internal.id, internal)
 
-  const handleChunk = (chunk: Buffer | string): void => {
-    for (const raw of chunk.toString().split(/\r?\n/)) {
-      const line = raw.replace(/\s+$/, '')
-      if (!line) continue
-      internal.log.push(line)
-      if (internal.log.length > MAX_LOG_LINES) internal.log.shift()
-      options.onLine?.(line)
-      broadcastLauncherEvent({
-        type: 'log',
-        processId: internal.id,
-        projectId: internal.projectId,
-        line
-      })
+  const buffers: Record<'stdout' | 'stderr', string> = { stdout: '', stderr: '' }
+
+  const emitLine = (raw: string): void => {
+    const line = stripAnsi(raw).replace(/\s+$/, '')
+    if (!line) return
+    internal.log.push(line)
+    if (internal.log.length > MAX_LOG_LINES) internal.log.shift()
+    options.onLine?.(line)
+    broadcastLauncherEvent({
+      type: 'log',
+      processId: internal.id,
+      projectId: internal.projectId,
+      line
+    })
+  }
+
+  // Los chunks del pipe no coinciden con líneas completas: se acumula hasta el
+  // salto de línea. Sin esto, una URL partida entre dos chunks se perdería.
+  const consume = (stream: 'stdout' | 'stderr', chunk: Buffer | string): void => {
+    buffers[stream] += chunk.toString()
+    const parts = buffers[stream].split(/\r?\n/)
+    buffers[stream] = parts.pop() ?? ''
+    for (const part of parts) emitLine(part)
+  }
+
+  /** Emite la última línea si el proceso terminó sin salto de línea final. */
+  const flush = (): void => {
+    for (const stream of ['stdout', 'stderr'] as const) {
+      const pending = buffers[stream]
+      buffers[stream] = ''
+      if (pending) emitLine(pending)
     }
   }
 
-  child.stdout?.on('data', handleChunk)
-  child.stderr?.on('data', handleChunk)
+  child.stdout?.on('data', (chunk) => consume('stdout', chunk))
+  child.stderr?.on('data', (chunk) => consume('stderr', chunk))
 
   child.once('error', (error) => {
+    flush()
     internal.status = 'failed'
     internal.exitCode = null
     internal.child = null
@@ -179,6 +206,7 @@ export function startManagedProcess(options: StartProcessOptions): ManagedProces
   })
 
   child.once('exit', (code) => {
+    flush()
     internal.exitCode = code
     internal.status = internal.stopping ? 'stopped' : code === 0 ? 'stopped' : 'failed'
     internal.child = null

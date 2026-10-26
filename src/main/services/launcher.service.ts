@@ -25,6 +25,7 @@ import {
 } from './ports.service'
 import {
   getManagedProcess,
+  getManagedProcessLog,
   spawnDetached,
   startManagedProcess,
   stopManagedProcess
@@ -149,6 +150,26 @@ async function usesViteDevServer(projectPath: string): Promise<boolean> {
     ...(packageJson?.devDependencies ?? {})
   }
   return 'vite' in dependencies || devScript.toLowerCase().includes('vite')
+}
+
+/**
+ * Extrae la URL local que anuncia un servidor de desarrollo. Vite imprime
+ * «➜ Local: http://localhost:5173/», pero puede añadir colores o partir la
+ * línea, así que se acepta también cualquier URL local con puerto.
+ */
+function parseLocalUrl(line: string): string | null {
+  const announced = line.match(/Local:\s*(https?:\/\/\S+)/i)?.[1]
+  const candidate =
+    announced ?? line.match(/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/i)?.[0]
+  if (!candidate) return null
+
+  try {
+    const url = new URL(candidate.replace(/[),.;]+$/, ''))
+    if (!url.port) return null
+    return `${url.protocol}//${url.host}`
+  } catch {
+    return null
+  }
 }
 
 /** Espera a que un proceso gestionado deje el servicio listo (o se caiga antes). */
@@ -425,8 +446,9 @@ async function runViteStep(session: LaunchSession, project: Project): Promise<bo
     args: ['run', 'dev'],
     cwd: project.path,
     onLine: (line) => {
-      const match = line.match(/Local:\s+(https?:\/\/[^\s]+)/i)
-      if (match && !captured.url) captured.url = match[1].replace(/\/+$/, '')
+      if (captured.url) return
+      const url = parseLocalUrl(line)
+      if (url) captured.url = url
     },
     onExit: () => {
       if (serviceId) handleUnexpectedExit(session, serviceId, 'vite', session.ports.vite, owner)
@@ -448,15 +470,31 @@ async function runViteStep(session: LaunchSession, project: Project): Promise<bo
   const ready = await waitForService(
     project.id,
     service.id,
-    async () => Boolean(captured.url) || (preferredFree && (await isPortOpen(VITE_PORT))),
+    async () =>
+      Boolean(captured.url) ||
+      (preferredFree &&
+        ((await isPortOpen(VITE_PORT)) || (await isPortOpen(VITE_PORT, 'localhost')))),
     VITE_TIMEOUT
   )
   if (!ready) {
+    // Se conserva el motivo real (código de salida y últimas líneas) para que el
+    // fallo no sea un «no arrancó a tiempo» sin contexto.
+    const exitCode = getManagedProcess(service.id)?.exitCode ?? null
     await stopManagedProcess(service.id)
     releasePort(VITE_PORT, owner)
     markService(session, service.id, 'failed')
     if (!cancelled.has(project.id)) {
-      setStep(session, 'vite', 'failed', 'Vite no arrancó a tiempo. Revisa la salida del proceso.')
+      const tail = getManagedProcessLog(service.id).slice(-2).join(' · ').slice(0, 240)
+      const headline =
+        exitCode !== null
+          ? `Vite terminó inesperadamente (código ${exitCode}).`
+          : 'Vite no arrancó a tiempo.'
+      setStep(
+        session,
+        'vite',
+        'failed',
+        `${headline} Revisa la salida del proceso.${tail ? ` Últimas líneas: ${tail}` : ''}`
+      )
     }
     return false
   }

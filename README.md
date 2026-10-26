@@ -2,7 +2,7 @@
 
 Lanzador de escritorio para proyectos Laravel en Windows.
 
-> **Estado:** EP-05 (Administración de procesos y puertos) — varios entornos a la vez, sin conflictos.
+> **Estado:** EP-06 (Dashboard e interfaz gráfica) — catálogo por tarjetas, resumen de estado y acciones rápidas.
 
 ## Stack
 
@@ -127,6 +127,11 @@ Detalles:
 - El panel «Entorno» muestra los pasos en vivo, las URLs resultantes y la salida
   de los procesos; **«Detener entorno»** cierra los procesos y libera los
   puertos.
+- La salida de cada proceso se lee **línea a línea** (se acumula el resto entre
+  lecturas) y se limpian los códigos ANSI antes de analizarla: así la URL que
+  anuncia Vite se reconoce aunque llegue partida o con colores.
+- Si Vite no arranca, el paso muestra el **código de salida** y las últimas
+  líneas de su salida, no un «no arrancó a tiempo» sin contexto.
 - Al cerrar DevLauncher se detienen los procesos que haya lanzado.
 
 ## Administración de procesos y puertos (EP-05)
@@ -152,6 +157,34 @@ entornos a la vez y cada uno se detiene por separado.
   ajeno que reutilizó el PID).
 - **Una sola instancia**: dos DevLauncher a la vez se pisarían procesos y
   puertos, así que la segunda ventana reutiliza (y enfoca) la primera.
+
+## Dashboard e interfaz gráfica (EP-06)
+
+La pantalla principal es un único dashboard con todo lo necesario para operar el
+catálogo sin navegar entre vistas:
+
+- **Resumen**: cinco cifras en vivo — proyectos registrados, entornos en marcha,
+  entornos arrancando, entornos con errores y servicios activos.
+- **Tarjetas de proyecto**: cada proyecto muestra su estado (sin arrancar,
+  arrancando, en marcha, con errores o detenido), la etiqueta de su framework, la
+  ruta, los servicios en ejecución con sus puertos y, si falló, el motivo del
+  error.
+- **Acciones rápidas** en cada tarjeta: iniciar/detener el entorno, reiniciar,
+  abrir la aplicación en el navegador cuando está lista, abrir la carpeta,
+  consultar requisitos, renombrar (edición en línea) y eliminar del catálogo.
+- **Filtro por framework**: chips con el número de proyectos de cada tipo, que se
+  recalculan al añadir o borrar.
+- **Estado en tiempo real**: el dashboard se suscribe a `launcher:event`, de modo
+  que las tarjetas y las cifras se actualizan sin recargar; iniciar un entorno no
+  bloquea el resto, así que pueden lanzarse varios en paralelo.
+- **Estados de carga y error**: esqueletos mientras carga el catálogo, botones
+  deshabilitados mientras hay una operación en curso y mensajes con la causa real
+  de cada fallo.
+- Al eliminar un proyecto que está en marcha, su entorno se detiene primero.
+
+Laravel es el único framework que el motor arranca por ahora; el resto se puede
+registrar y consultar, pero su arranque llegará con la compatibilidad de
+frameworks (EP-10).
 
 ## Estructura
 
@@ -181,9 +214,10 @@ src/
 │  ├─ index.html
 │  └─ src/
 │     ├─ main.tsx
-│     ├─ App.tsx
-│     ├─ components/     # ProjectManager, LauncherPanel, PortsPanel, EnvironmentSection, …
-│     ├─ lib/
+│     ├─ App.tsx                # Dashboard (EP-06)
+│     ├─ components/            # ProjectDashboard, ProjectCard, DashboardStats,
+│     │                         # LauncherPanel, PortsPanel, EnvironmentSection, …
+│     ├─ lib/                   # Colores por framework y mensajes de error IPC
 │     └─ styles/
 └─ shared/               # Tipos, canales y constantes compartidas
    ├─ constants/
@@ -213,12 +247,12 @@ npm install
 npm run dev
 ```
 
-Deberías ver el catálogo de proyectos con el botón «Añadir proyecto» y, debajo,
-el panel «Entorno» con el estado de las herramientas y los puertos. Al elegir
-una carpeta se detecta automáticamente el tipo de proyecto; con el botón
-«Requisitos» de cada proyecto se comprueba si le faltan dependencias y con
-«▶ Iniciar entorno» se arranca la aplicación completa (base de datos, PHP y
-Vite) sin escribir ningún comando. Puedes arrancar varios proyectos a la vez:
-cada uno aparece en «Entornos en marcha» y en «Procesos y puertos», donde se
-detienen de forma individual. En el desplegable «Diagnóstico del entorno»
-puedes probar el canal `app:ping`.
+Deberías ver el dashboard con el resumen del catálogo y la tarjeta de cada
+proyecto, y debajo los paneles «Entornos en marcha», «Procesos y puertos» y
+«Entorno». Al elegir una carpeta con «Añadir proyecto» se detecta automáticamente
+el tipo de proyecto; cada tarjeta permite consultar sus «Requisitos» y arrancar
+toda la aplicación (base de datos, PHP y Vite) sin escribir ningún comando. Puedes
+arrancar varios proyectos a la vez: cada uno se actualiza en su tarjeta y aparece
+también en «Entornos en marcha» y «Procesos y puertos», donde se detienen de forma
+individual. En el desplegable «Diagnóstico del entorno» puedes probar el canal
+`app:ping`.
