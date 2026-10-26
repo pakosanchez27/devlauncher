@@ -102,4 +102,8 @@ export interface AppSettings {
   executables: Partial<Record<ToolId, string>>
   /** Ruta raíz de WampServer, si se quiere forzar. */
   wampPath: string | null
+  /** Editor con el que abrir los proyectos (null = detección automática). */
+  editorPath: string | null
+  /** true para abrir el proyecto en el editor al arrancar su entorno. */
+  openEditorOnLaunch: boolean
 }

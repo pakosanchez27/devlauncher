@@ -3,16 +3,16 @@
  * puertos (EP-05) y de la compatibilidad de frameworks (EP-10).
  *
  * El motor arranca el entorno de un proyecto de forma ordenada: comprueba
- * requisitos → asegura la base de datos (si aplica) → servidor principal
- * (`artisan serve`, `spark serve`, `php -S` o `npm run dev`) → servidor de
- * desarrollo del frontend (Vite) cuando es un proyecto PHP con frontend. El
- * plan concreto depende del framework detectado. Puede haber varios entornos
- * en marcha a la vez, cada uno con su propia sesión. Compartido entre main,
- * preload y renderer.
+ * requisitos → abre el proyecto en el editor → asegura la base de datos (si
+ * aplica) → servidor principal (`artisan serve`, `spark serve`, `php -S` o
+ * `npm run dev`) → servidor de desarrollo del frontend (Vite) cuando es un
+ * proyecto PHP con frontend. El plan concreto depende del framework detectado.
+ * Puede haber varios entornos en marcha a la vez, cada uno con su propia
+ * sesión. Compartido entre main, preload y renderer.
  */
 
 /** Pasos del arranque ordenado. */
-export type LaunchStepId = 'requirements' | 'database' | 'server' | 'frontend'
+export type LaunchStepId = 'requirements' | 'editor' | 'database' | 'server' | 'frontend'
 
 /** Estado de un paso del arranque. */
 export type LaunchStepState = 'pending' | 'running' | 'ready' | 'skipped' | 'failed'

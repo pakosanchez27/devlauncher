@@ -27,6 +27,8 @@ function EnvironmentSection(): ReactElement {
   const [ports, setPorts] = useState<PortsReport | null>(null)
   const [form, setForm] = useState<Partial<Record<ToolId, string>>>({})
   const [wampPath, setWampPath] = useState('')
+  const [editorPath, setEditorPath] = useState('')
+  const [openEditorOnLaunch, setOpenEditorOnLaunch] = useState(true)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +44,8 @@ function EnvironmentSection(): ReactElement {
     setPorts(portsReport)
     setForm(settings.executables)
     setWampPath(settings.wampPath ?? '')
+    setEditorPath(settings.editorPath ?? '')
+    setOpenEditorOnLaunch(settings.openEditorOnLaunch)
   }, [])
 
   useEffect(() => {
@@ -66,7 +70,12 @@ function EnvironmentSection(): ReactElement {
     setSaving(true)
     setError(null)
     try {
-      await window.api.settings.update({ executables: form, wampPath })
+      await window.api.settings.update({
+        executables: form,
+        wampPath,
+        editorPath,
+        openEditorOnLaunch
+      })
       await refresh()
     } catch (cause) {
       setError(messageFromError(cause))
@@ -81,7 +90,7 @@ function EnvironmentSection(): ReactElement {
         <div>
           <h2 className="text-lg font-semibold">Entorno</h2>
           <p className="text-sm text-slate-400">
-            Herramientas y puertos necesarios para ejecutar proyectos Laravel.
+            Herramientas, puertos y preferencias para ejecutar tus proyectos.
           </p>
         </div>
         <button
@@ -208,6 +217,32 @@ function EnvironmentSection(): ReactElement {
               placeholder="C:\\wamp64"
               className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500"
             />
+          </label>
+
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs uppercase tracking-wide text-slate-500">
+              Editor para abrir los proyectos
+            </span>
+            <input
+              value={editorPath}
+              onChange={(event) => setEditorPath(event.target.value)}
+              placeholder="C:\\Users\\tu-usuario\\AppData\\Local\\Programs\\Microsoft VS Code\\bin\\code.cmd"
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500"
+            />
+            <span className="text-[11px] text-slate-500">
+              Vacío: se usa Visual Studio Code del PATH o de su instalación habitual y, si no está,
+              se abre la carpeta en el Explorador de Windows.
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-slate-300 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={openEditorOnLaunch}
+              onChange={(event) => setOpenEditorOnLaunch(event.target.checked)}
+              className="h-4 w-4 accent-indigo-500"
+            />
+            Abrir el proyecto en el editor al iniciar el entorno
           </label>
         </div>
 

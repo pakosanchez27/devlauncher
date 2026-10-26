@@ -296,6 +296,22 @@ export async function detectWampServer(settings: AppSettings): Promise<WampStatu
   return { installed: false, path: null, phpPath: null, mysqlPath: null }
 }
 
+/**
+ * true si la bandeja de WampServer está abierta.
+ *
+ * Se consulta el proceso (`tasklist`) porque el puerto de MySQL puede seguir
+ * escuchando con la bandeja cerrada, y el usuario espera que «Iniciar entorno»
+ * vuelva a abrir WampServer en ese caso.
+ */
+export async function isWampRunning(): Promise<boolean> {
+  const result = await runCommand(executableName('tasklist'), [
+    '/FI',
+    'IMAGENAME eq wampmanager.exe',
+    '/NH'
+  ])
+  return result.ok && result.output.toLowerCase().includes('wampmanager.exe')
+}
+
 /** Extrae una versión legible de la salida de un comando. */
 function extractVersion(output: string): string | null {
   const firstLine = output

@@ -17,6 +17,8 @@ import type { Framework, Project } from '@shared/types/project'
  * - **Node**: `npm run dev`, que anuncia su URL (Vite, Next.js, Nuxt…).
  * - **Frontend de un proyecto PHP**: `npm run dev` con Vite, si el proyecto lo
  *   declara.
+ * - **Editor**: abre la carpeta del proyecto en VS Code (o el editor
+ *   configurado) para todos los frameworks soportados.
  *
  * El plan es la única fuente de verdad: el motor no decide nada por framework,
  * solo ejecuta lo que aquí se describe.
@@ -77,6 +79,7 @@ export type LaunchPlan =
 
 const STEPS = {
   requirements: 'Requisitos del proyecto',
+  editor: 'Abrir proyecto en el editor',
   database: 'Base de datos (WampServer/MySQL)',
   server: 'Servidor principal'
 } as const satisfies Record<Exclude<LaunchStepId, 'frontend'>, string>
@@ -84,6 +87,15 @@ const STEPS = {
 const FRONTEND_STEP = {
   id: 'frontend',
   label: 'Servidor Vite (npm run dev)'
+} as const
+
+/**
+ * Apertura del proyecto en el editor. Va justo después de los requisitos: se
+ * abre la carpeta mientras los servicios levantan.
+ */
+const EDITOR_STEP = {
+  id: 'editor',
+  label: STEPS.editor
 } as const
 
 const NO_DATABASE: Record<'node' | 'php' | 'unknown', string> = {
@@ -202,6 +214,18 @@ function unsupported(framework: Framework, reason: string): LaunchPlan {
 
 /** Construye el plan de arranque de un proyecto según su framework. */
 export async function buildLaunchPlan(project: Project): Promise<LaunchPlan> {
+  return withEditorStep(await planFor(project))
+}
+
+/** Inserta la apertura del editor justo después del paso de requisitos. */
+function withEditorStep(plan: LaunchPlan): LaunchPlan {
+  if (!plan.supported) return plan
+  const [first, ...rest] = plan.steps
+  if (!first) return plan
+  return { ...plan, steps: [first, EDITOR_STEP, ...rest] }
+}
+
+async function planFor(project: Project): Promise<LaunchPlan> {
   const requirementsStep = { id: 'requirements' as const, label: STEPS.requirements }
 
   switch (project.framework) {

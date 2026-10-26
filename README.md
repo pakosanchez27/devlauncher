@@ -2,7 +2,7 @@
 
 Lanzador de escritorio para proyectos PHP y JavaScript en Windows.
 
-> **Estado:** EP-11 (Empaquetado) — instalador NSIS y versión portable para Windows.
+> **Estado:** EP-12 (Editor y WampServer) — abre el proyecto en VS Code y arranca WAMP cuando hace falta.
 
 ## Stack
 
@@ -101,8 +101,9 @@ Comprueba que el equipo puede ejecutar un proyecto:
   proyecto Node).
 - **Puertos**: 3306 (MySQL), 3000 (Next.js), 8000 (servidores PHP) y 5173 (Vite).
 
-Las rutas de los ejecutables y la de WampServer pueden fijarse manualmente en
-el panel «Entorno» → «Rutas de ejecutables y preferencias».
+Las rutas de los ejecutables, la de WampServer y la del editor pueden fijarse
+manualmente en el panel «Entorno» → «Rutas de ejecutables y preferencias», donde
+también se decide si el proyecto se abre en el editor al arrancar.
 
 ## Motor de automatización (EP-04)
 
@@ -110,20 +111,27 @@ El botón **«▶ Iniciar entorno»** de cada proyecto arranca todo sin escribir
 comandos. El motor ejecuta el **plan de su framework** (EP-10) y avanza solo
 cuando el servicio anterior está listo:
 
-| Paso             | Acción                                                            | Comprobación                     |
-| ---------------- | ----------------------------------------------------------------- | -------------------------------- |
-| 1. Requisitos    | Verifica los archivos y dependencias que exige el framework       | Todos los obligatorios presentes |
-| 2. Base de datos | Arranca WampServer **solo si** nada escucha en el puerto de MySQL | Espera al puerto (30 s)          |
-| 3. Servidor      | `artisan serve`, `spark serve`, `php -S` o `npm run dev`          | Puerto abierto o URL anunciada   |
-| 4. Frontend      | `npm run dev` con Vite, si es un proyecto PHP que lo declara      | URL de Vite o puerto 5173        |
+| Paso             | Acción                                                                | Comprobación                     |
+| ---------------- | --------------------------------------------------------------------- | -------------------------------- |
+| 1. Requisitos    | Verifica los archivos y dependencias que exige el framework           | Todos los obligatorios presentes |
+| 2. Editor        | Abre la carpeta del proyecto en VS Code (o el editor configurado)     | El lanzador responde             |
+| 3. Base de datos | Arranca WampServer si MySQL no escucha (y si la bandeja está cerrada) | Puerto de MySQL (60 s)           |
+| 4. Servidor      | `artisan serve`, `spark serve`, `php -S` o `npm run dev`              | Puerto abierto o URL anunciada   |
+| 5. Frontend      | `npm run dev` con Vite, si es un proyecto PHP que lo declara          | URL de Vite o puerto 5173        |
 
-Los pasos 2 y 4 solo existen si el framework los necesita: un proyecto React
-arranca únicamente requisitos → servidor.
+Los pasos 3 y 5 solo existen si el framework los necesita: un proyecto React
+arranca únicamente requisitos → editor → servidor.
 
 Detalles:
 
-- El paso 2 se **omite** si el proyecto usa SQLite y se marca **listo** si MySQL
-  ya está en marcha: nunca se arranca WampServer sin necesidad.
+- El paso 2 se puede desactivar en «Entorno»; si no se encuentra VS Code se abre
+  la carpeta en el Explorador de Windows y el arranque continúa igual.
+- El paso 3 se **omite** si el proyecto usa SQLite y se marca **listo** si MySQL
+  ya está en marcha. Si MySQL escucha pero la bandeja de WAMP está cerrada, se
+  abre WampServer sin esperar; si no escucha, se lanza WAMP y se espera al
+  puerto.
+- `wampmanager.exe` pide permisos de administrador: Windows puede mostrar su
+  aviso (UAC). Si se deniega, el paso lo explica en vez de esperar en vano.
 - El puerto de los servidores PHP se elige libre a partir de 8000 para no chocar
   con otros servicios. Los dev servers de Node eligen su puerto y se reserva el
   que anuncian.
@@ -258,6 +266,27 @@ Detalles:
   empaquetada y en `%APPDATA%\devlauncher` en desarrollo, de modo que el
   catálogo de desarrollo no aparece en la aplicación instalada.
 
+## Editor y WampServer al arrancar (EP-12)
+
+Pulsar «▶ Iniciar entorno» deja el proyecto listo para trabajar: además de los
+servicios, DevLauncher abre la carpeta en el editor y se asegura de que
+WampServer esté en marcha.
+
+**Editor.** Se resuelve en este orden: ruta indicada en «Entorno» → `code.cmd`
+del PATH → instalación habitual de VS Code → Explorador de Windows. Sirve
+cualquier editor con lanzador de línea de comandos (VS Code, Cursor…). El paso
+nunca hace fallar el arranque: si el editor no aparece, se informa y el entorno
+sigue.
+
+**WampServer.** El paso de base de datos comprueba primero el puerto de MySQL:
+
+- Si nada escucha, lanza `wampmanager.exe` y espera hasta 60 s a que MySQL
+  responda (WAMP arranca Apache y MySQL como servicios de Windows).
+- Si MySQL ya escucha pero la bandeja de WAMP está cerrada, abre la bandeja sin
+  bloquear; si está abierta, no hace nada.
+- Si WAMP estaba abierto y MySQL no responde, da 15 s y explica el motivo
+  (MySQL detenido en la bandeja, puerto distinto o permisos denegados).
+
 ## Estructura
 
 ```
@@ -268,6 +297,7 @@ src/
 │  └─ services/          # Lógica de negocio y persistencia
 │     ├─ app.service.ts
 │     ├─ command.ts              # Ejecución de comandos externos
+│     ├─ editor.service.ts       # Apertura del proyecto en el editor (EP-12)
 │     ├─ environment.service.ts  # Detección de herramientas, requisitos y puertos
 │     ├─ launcher.service.ts     # Motor de arranque y sesiones por proyecto (EP-04/05/10)
 │     ├─ launch-plan.ts          # Plan de arranque de cada framework (EP-10)

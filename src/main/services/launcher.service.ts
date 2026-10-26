@@ -13,8 +13,10 @@ import type { Project } from '@shared/types/project'
 import {
   checkProjectRequirements,
   detectWampServer,
+  isWampRunning,
   resolveExecutable
 } from './environment.service'
+import { openProjectInEditor } from './editor.service'
 import { broadcastLauncherEvent } from './events'
 import { APP_PORT_START, VITE_PORT, buildLaunchPlan, type LaunchPlan } from './launch-plan'
 import {
@@ -32,7 +34,7 @@ import {
   stopManagedProcess
 } from './process.service'
 import { readProjects } from './project.repository'
-import { delay, isPortAvailable, isPortOpen, waitForHttp, waitForPort } from './readiness'
+import { delay, isPortAvailable, isPortOpen, waitForHttp } from './readiness'
 import { getSettings } from './settings.service'
 
 /**
@@ -44,11 +46,12 @@ import { getSettings } from './settings.service'
  * al siguiente:
  *
  *   1. Requisitos del proyecto, propios de su framework.
- *   2. Base de datos: arranca WampServer/MySQL solo si el proyecto la necesita
+ *   2. Editor: abre la carpeta del proyecto en VS Code (o el configurado).
+ *   3. Base de datos: arranca WampServer/MySQL solo si el proyecto la necesita
  *      y nada escucha ya en su puerto.
- *   3. Servidor principal: `artisan serve`, `spark serve`, `php -S` o
+ *   4. Servidor principal: `artisan serve`, `spark serve`, `php -S` o
  *      `npm run dev`.
- *   4. Frontend: `npm run dev` con Vite, si es un proyecto PHP que lo declara.
+ *   5. Frontend: `npm run dev` con Vite, si es un proyecto PHP que lo declara.
  *
  * Puede haber varios entornos en marcha a la vez. Cada uno tiene su sesión y
  * sus puertos reservados, de modo que dos proyectos nunca chocan entre sí.
@@ -56,7 +59,10 @@ import { getSettings } from './settings.service'
 
 const DB_DEFAULT_PORT = 3306
 
-const DB_TIMEOUT = 30000
+/** Arranque en frío de WampServer: servicios de MySQL/Apache en Windows. */
+const DB_TIMEOUT = 60000
+/** WAMP ya está abierto: si MySQL no escucha, se le da un margen corto. */
+const DB_WAIT_RUNNING = 15000
 /** Servidores PHP: arrancan rápido. */
 const SERVER_TIMEOUT = 25000
 /** Dev servers de Node: instalación/compilación inicial más lenta. */
@@ -272,6 +278,29 @@ async function runRequirementsStep(
   return true
 }
 
+/**
+ * Abre el proyecto en el editor configurado. No bloquea el arranque: si el
+ * editor no se encuentra, el paso queda informado y el entorno sigue.
+ */
+async function runEditorStep(session: LaunchSession, project: Project): Promise<void> {
+  if (!session.steps.some((step) => step.id === 'editor')) return
+
+  const settings = await getSettings()
+  if (!settings.openEditorOnLaunch) {
+    setStep(
+      session,
+      'editor',
+      'skipped',
+      'La apertura automática del editor está desactivada en «Entorno».'
+    )
+    return
+  }
+
+  setStep(session, 'editor', 'running', 'Abriendo el proyecto en el editor…')
+  const result = await openProjectInEditor(project.path, settings.editorPath)
+  setStep(session, 'editor', result.opened ? 'ready' : 'skipped', result.message)
+}
+
 /** Resuelve el puerto de base de datos que necesita el proyecto. */
 async function resolveDatabasePort(
   project: Project,
@@ -291,6 +320,31 @@ async function resolveDatabasePort(
   return { port: Number(env.DB_PORT) || DB_DEFAULT_PORT }
 }
 
+/** true si algo escucha en el puerto, tanto en IPv4 como en IPv6 (WAMP usa ambos). */
+async function isDatabaseListening(port: number): Promise<boolean> {
+  if (await isPortOpen(port, '127.0.0.1')) return true
+  return isPortOpen(port, 'localhost')
+}
+
+/** Espera a que MySQL escuche en el puerto (WAMP puede tardar en arrancar). */
+async function waitForDatabase(port: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await isDatabaseListening(port)) return true
+    await delay(300)
+  }
+  return false
+}
+
+/**
+ * Lanza WampServer en segundo plano. `wampmanager.exe` pide permisos de
+ * administrador (necesarios para arrancar los servicios de Apache y MySQL), así
+ * que Windows puede mostrar su aviso de control de cuentas de usuario.
+ */
+function startWampServer(wampPath: string): void {
+  spawnDetached(join(wampPath, 'wampmanager.exe'), [], wampPath)
+}
+
 async function runDatabaseStep(
   session: LaunchSession,
   project: Project,
@@ -305,13 +359,28 @@ async function runDatabaseStep(
   }
 
   const port = resolved.port
-  if (await isPortOpen(port)) {
-    setStep(session, 'database', 'ready', `MySQL ya está escuchando en el puerto ${port}.`)
+  const wamp = await detectWampServer(await getSettings())
+  const wampPath = wamp.installed ? wamp.path : null
+  const wampRunning = wamp.installed ? await isWampRunning() : false
+
+  // MySQL puede seguir escuchando con la bandeja de WAMP cerrada: se abre igual
+  // para que el usuario lo encuentre donde espera, sin bloquear el arranque.
+  if (await isDatabaseListening(port)) {
+    if (wampPath && !wampRunning) {
+      startWampServer(wampPath)
+      setStep(
+        session,
+        'database',
+        'ready',
+        `MySQL ya está escuchando en el puerto ${port}. Se abrió WampServer.`
+      )
+    } else {
+      setStep(session, 'database', 'ready', `MySQL ya está escuchando en el puerto ${port}.`)
+    }
     return true
   }
 
-  const wamp = await detectWampServer(await getSettings())
-  if (!wamp.installed || !wamp.path) {
+  if (!wampPath) {
     setStep(
       session,
       'database',
@@ -320,8 +389,6 @@ async function runDatabaseStep(
     )
     return false
   }
-
-  const wampPath = wamp.path
 
   // Varios entornos pueden necesitar MySQL a la vez: se arranca una sola vez y
   // el resto espera al mismo arranque en lugar de lanzar WampServer en paralelo.
@@ -333,21 +400,27 @@ async function runDatabaseStep(
       session,
       'database',
       'running',
-      `MySQL no responde; iniciando WampServer (${wampPath})…`
+      wampRunning
+        ? `WampServer está abierto pero MySQL no responde; esperando al puerto ${port}…`
+        : `MySQL no responde; iniciando WampServer (${wampPath}). Acepta el aviso de permisos de Windows si aparece…`
     )
-    startup = (async (): Promise<boolean> => {
-      spawnDetached(join(wampPath, 'wampmanager.exe'), [], wampPath)
-      return waitForPort(port, '127.0.0.1', DB_TIMEOUT)
-    })().finally(() => databaseStartups.delete(port))
+    if (!wampRunning) startWampServer(wampPath)
+
+    startup = waitForDatabase(port, wampRunning ? DB_WAIT_RUNNING : DB_TIMEOUT).finally(() =>
+      databaseStartups.delete(port)
+    )
     databaseStartups.set(port, startup)
   }
 
   if (!(await startup)) {
+    const stillRunning = await isWampRunning()
     setStep(
       session,
       'database',
       'failed',
-      `WampServer se lanzó pero MySQL no respondió en el puerto ${port} (30 s).`
+      stillRunning
+        ? `WampServer está abierto pero MySQL no escucha en el puerto ${port}. Revisa el icono de WAMP: MySQL puede estar detenido o usar otro puerto.`
+        : `WampServer no llegó a arrancar (permisos de administrador denegados o instalación incompleta). Ábrelo manualmente y vuelve a intentarlo.`
     )
     return false
   }
@@ -693,6 +766,7 @@ async function runLaunchPlan(
   const aborted = (): boolean => cancelled.has(project.id)
 
   if (aborted() || !(await runRequirementsStep(session, project, plan))) return
+  await runEditorStep(session, project)
   if (
     aborted() ||
     (plan.database.source !== 'none' && !(await runDatabaseStep(session, project, plan)))
