@@ -705,11 +705,17 @@ export function getLaunchSession(projectId: string): LaunchSession | null {
 
 /**
  * Abre en el navegador la aplicación de un entorno en marcha (EP-07). Se usa la
- * URL del servidor principal y, si el proyecto solo tiene frontend, la de Vite.
+ * URL del servidor principal o, si se pide, la del frontend (Vite).
  */
-export async function openProjectUrl(projectId: string): Promise<ExternalOpenResult> {
+export async function openProjectUrl(
+  projectId: string,
+  target: 'app' | 'vite' = 'app'
+): Promise<ExternalOpenResult> {
   const session = sessions.get(projectId)
-  const url = session?.urls.app ?? session?.urls.vite ?? null
+  const url =
+    target === 'vite'
+      ? (session?.urls.vite ?? null)
+      : (session?.urls.app ?? session?.urls.vite ?? null)
   if (!url) {
     throw new Error('El entorno no tiene una URL disponible: inícialo primero.')
   }

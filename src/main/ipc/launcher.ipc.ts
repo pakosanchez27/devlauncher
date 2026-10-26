@@ -35,6 +35,7 @@ export function registerLauncherIpcHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.LAUNCHER_OPEN_URL,
-    (_event, projectId: string): Promise<ExternalOpenResult> => openProjectUrl(projectId)
+    (_event, projectId: string, target?: 'app' | 'vite'): Promise<ExternalOpenResult> =>
+      openProjectUrl(projectId, target)
   )
 }

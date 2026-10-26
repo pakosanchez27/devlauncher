@@ -75,8 +75,8 @@ const api = {
     processes: (): Promise<ManagedProcessInfo[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_PROCESSES),
     /** Abre la aplicación del entorno en el navegador configurado (EP-07). */
-    openUrl: (projectId: string): Promise<ExternalOpenResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_OPEN_URL, projectId),
+    openUrl: (projectId: string, target?: 'app' | 'vite'): Promise<ExternalOpenResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_OPEN_URL, projectId, target),
     /** Se suscribe a los eventos del motor; devuelve la función para cancelarla. */
     onEvent: (listener: (event: LauncherEvent) => void): (() => void) => {
       const handler = (_event: IpcRendererEvent, payload: LauncherEvent): void => listener(payload)

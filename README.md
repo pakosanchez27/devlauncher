@@ -2,7 +2,7 @@
 
 Lanzador de escritorio para proyectos PHP y JavaScript en Windows.
 
-> **Estado:** EP-07 (Integración con herramientas de desarrollo) — abre el proyecto en el editor y la aplicación en el navegador configurado.
+> **Estado:** EP-07 (Integración con herramientas de desarrollo) · interfaz renovada con navegación por secciones.
 
 ## Stack
 
@@ -103,9 +103,9 @@ Comprueba que el equipo puede ejecutar un proyecto:
   proyecto Node).
 - **Puertos**: 3306 (MySQL), 3000 (Next.js), 8000 (servidores PHP) y 5173 (Vite).
 
-Las rutas de los ejecutables, la de WampServer y la del editor pueden fijarse
-manualmente en el panel «Entorno» → «Rutas de ejecutables y preferencias», donde
-también se decide si el proyecto se abre en el editor al arrancar.
+Las rutas de los ejecutables, la de WampServer, la del editor y la del navegador
+pueden fijarse manualmente en **Ajustes → Preferencias**, donde también se decide
+si el proyecto se abre en el editor al arrancar.
 
 ## Motor de automatización (EP-04)
 
@@ -126,8 +126,9 @@ arranca únicamente requisitos → editor → servidor.
 
 Detalles:
 
-- El paso 2 se puede desactivar en «Entorno»; si no se encuentra VS Code se abre
-  la carpeta en el Explorador de Windows y el arranque continúa igual.
+- El paso 2 se puede desactivar en **Ajustes → Preferencias**; si no se encuentra
+  VS Code se abre la carpeta en el Explorador de Windows y el arranque continúa
+  igual.
 - El paso 3 se **omite** si el proyecto usa SQLite y se marca **listo** si MySQL
   ya está en marcha. Si MySQL escucha pero la bandeja de WAMP está cerrada, se
   abre WampServer sin esperar; si no escucha, se lanza WAMP y se espera al
@@ -139,9 +140,8 @@ Detalles:
   que anuncian.
 - Si un paso falla, el arranque se detiene y se **deshace** lo ya iniciado (no
   quedan procesos a medias).
-- El panel «Entorno» muestra los pasos en vivo, las URLs resultantes y la salida
-  de los procesos; **«Detener entorno»** cierra los procesos y libera los
-  puertos.
+- La vista **Actividad** muestra los pasos en vivo, las URLs resultantes y la
+  salida de los procesos; **«Detener»** cierra los procesos y libera los puertos.
 - La salida de cada proceso se lee **línea a línea** (se acumula el resto entre
   lecturas) y se limpian los códigos ANSI antes de analizarla: así la URL que
   anuncia el servidor se reconoce aunque llegue partida o con colores.
@@ -158,13 +158,13 @@ entornos a la vez y cada uno se detiene por separado.
   sesión; dos proyectos nunca reciben el mismo, aunque el servicio todavía no
   esté escuchando. Los dev servers de Node reservan el puerto que anuncian.
 - **Conflictos externos**: al comprobar un puerto se muestra qué ejecutable lo
-  ocupa y su PID (`env:inspect-port`). El panel «Puertos» del verificador también
+  ocupa y su PID (`env:inspect-port`). La tarjeta «Puertos» de **Ajustes** también
   indica el dueño de 3306, 8000 y 5173.
-- **Gestor de procesos**: el panel «Procesos y puertos» lista los procesos vivos
-  con proyecto, servicio, PID, puertos y tiempo transcurrido; permite detener un
-  servicio suelto, un entorno completo o todos.
+- **Gestor de procesos**: **Ajustes → Procesos gestionados** lista los procesos
+  vivos con proyecto, servicio, PID, puertos y tiempo transcurrido; permite
+  detener un servicio suelto, un entorno completo o todos.
 - **Parada granular**: el botón de cada proyecto alterna entre «Iniciar» y
-  «Detener», y cada servicio tiene su propio botón en el panel de entornos.
+  «Detener», y cada servicio tiene su propio botón en **Actividad**.
 - **Cierre fiable**: al salir se espera a que `taskkill` termine. Además, los
   procesos se registran en `processes.json`: si la aplicación se cierra de forma
   anómala, al volver a arrancar se limpian los huérfanos comprobando que el PID
@@ -173,29 +173,43 @@ entornos a la vez y cada uno se detiene por separado.
 - **Una sola instancia**: dos DevLauncher a la vez se pisarían procesos y
   puertos, así que la segunda ventana reutiliza (y enfoca) la primera.
 
-## Dashboard e interfaz gráfica (EP-06)
+## Interfaz y experiencia de uso (EP-06)
 
-La pantalla principal es un único dashboard con todo lo necesario para operar el
-catálogo sin navegar entre vistas:
+La interfaz se organiza en tres secciones con una barra lateral que muestra el
+estado en vivo:
 
-- **Resumen**: cinco cifras en vivo — proyectos registrados, entornos en marcha,
-  entornos arrancando, entornos con errores y servicios activos.
-- **Tarjetas de proyecto**: cada proyecto muestra su estado (sin arrancar,
-  arrancando, en marcha, con errores o detenido), la etiqueta de su framework, la
-  ruta, los servicios en ejecución con sus puertos y, si falló, el motivo del
-  error.
-- **Acciones rápidas** en cada tarjeta: iniciar/detener el entorno, reiniciar,
-  abrir la aplicación en el navegador cuando está lista, abrir la carpeta, abrir
-  en el editor, consultar requisitos, renombrar (edición en línea) y eliminar del
-  catálogo.
-- **Filtro por framework**: chips con el número de proyectos de cada tipo, que se
-  recalculan al añadir o borrar.
-- **Estado en tiempo real**: el dashboard se suscribe a `launcher:event`, de modo
-  que las tarjetas y las cifras se actualizan sin recargar; iniciar un entorno no
-  bloquea el resto, así que pueden lanzarse varios en paralelo.
-- **Estados de carga y error**: esqueletos mientras carga el catálogo, botones
-  deshabilitados mientras hay una operación en curso y mensajes con la causa real
-  de cada fallo.
+- **Proyectos**: el catálogo. Un resumen compacto (en marcha, arrancando, con
+  errores y servicios activos), filtros por framework y una tarjeta por proyecto.
+  Cada tarjeta muestra el estado, el framework, la ruta, los servicios con sus
+  puertos y, durante el arranque, el paso actual con una barra de progreso. La
+  acción principal cambia con el estado: «Iniciar entorno», «Abrir aplicación» +
+  «Detener», o «Reintentar» si falló. Editor, carpeta y requisitos quedan como
+  acciones secundarias, y renombrar/eliminar viven en el menú «⋯».
+- **Actividad**: los entornos activos con la línea de pasos, las URLs, los
+  servicios y la salida de cada proceso (desplegable por entorno). Desde aquí se
+  detiene un entorno, un servicio suelto o todos.
+- **Ajustes**: herramientas detectadas, WampServer, puertos, preferencias
+  (ejecutables, editor, navegador, abrir en editor al arrancar) y diagnóstico
+  técnico.
+
+Detalles de la experiencia:
+
+- **Sin jerga interna**: la interfaz no muestra números de épica ni detalles de
+  IPC; habla de proyectos, entornos y servicios.
+- **Estados vacíos guiados**: sin proyectos se explica el flujo completo (añadir
+  carpeta → iniciar entorno → abrir aplicación); sin entornos activos, «Actividad»
+  invita a ir a Proyectos.
+- **Avisos junto a la acción**: los resultados y errores aparecen como avisos
+  flotantes y no como un banner lejano; cada tarjeta conserva además el error del
+  último arranque con acceso directo a «Actividad».
+- **Operaciones independientes**: iniciar, detener o abrir un proyecto no bloquea
+  el resto de tarjetas.
+- **Estado en tiempo real**: una sola suscripción a `launcher:event` actualiza la
+  barra lateral, las tarjetas y la vista de actividad sin recargar.
+- **Confirmaciones propias**: eliminar un proyecto y registrar un framework no
+  reconocido usan un diálogo modal, no el `confirm` del sistema.
+- **Accesibilidad**: foco visible, etiquetas `aria` en iconos y menús, diálogos
+  modales y textos con mayor contraste y tamaño.
 - Al eliminar un proyecto que está en marcha, su entorno se detiene primero.
 
 Cualquier framework soportado por el motor (EP-10) se puede arrancar desde su
@@ -275,7 +289,7 @@ Pulsar «▶ Iniciar entorno» deja el proyecto listo para trabajar: además de 
 servicios, DevLauncher abre la carpeta en el editor y se asegura de que
 WampServer esté en marcha.
 
-**Editor.** Se resuelve en este orden: ruta indicada en «Entorno» → `code.cmd`
+**Editor.** Se resuelve en este orden: ruta indicada en **Ajustes** → `code.cmd`
 del PATH → instalación habitual de VS Code → Explorador de Windows. Sirve
 cualquier editor con lanzador de línea de comandos (VS Code, Cursor…). El paso
 nunca hace fallar el arranque: si el editor no aparece, se informa y el entorno
@@ -297,14 +311,14 @@ la aplicación:
 
 - **Abrir en editor**: abre la carpeta del proyecto en el editor configurado sin
   arrancar el entorno. Usa el mismo orden de resolución que el paso del arranque
-  (ruta de «Entorno» → `code.cmd` del PATH → instalación habitual → Explorador).
+  (ruta de **Ajustes** → `code.cmd` del PATH → instalación habitual → Explorador).
 - **Abrir aplicación**: abre la URL del servidor principal en el navegador
   configurado; en proyectos solo de frontend usa la URL de Vite. La URL la resuelve
   el proceso principal desde la sesión de arranque, no el renderer, y solo se
   admiten direcciones `http`/`https`.
-- **Navegador preferido**: se indica en «Entorno». Vacío usa el navegador
-  predeterminado de Windows; si la ruta configurada no existe o falla, se recurre
-  al predeterminado y se informa del motivo.
+- **Navegador preferido**: se indica en **Ajustes → Preferencias**. Vacío usa el
+  navegador predeterminado de Windows; si la ruta configurada no existe o falla,
+  se recurre al predeterminado y se informa del motivo.
 
 ## Estructura
 
@@ -337,10 +351,16 @@ src/
 │  ├─ index.html
 │  └─ src/
 │     ├─ main.tsx
-│     ├─ App.tsx                # Dashboard (EP-06)
-│     ├─ components/            # ProjectDashboard, ProjectCard, DashboardStats,
-│     │                         # LauncherPanel, PortsPanel, EnvironmentSection, …
-│     ├─ lib/                   # Colores por framework y mensajes de error IPC
+│     ├─ App.tsx                # Navegación entre secciones
+│     ├─ components/
+│     │  ├─ layout/Sidebar.tsx  # Marca, secciones y estado en vivo
+│     │  ├─ ProjectsView.tsx    # Catálogo, filtros y acciones
+│     │  ├─ ActivityView.tsx    # Entornos, pasos y registros
+│     │  ├─ SettingsView.tsx    # Herramientas, preferencias y diagnóstico
+│     │  ├─ ProjectCard.tsx / ProjectRequirements.tsx / DashboardStats.tsx
+│     │  ├─ PortsPanel.tsx / AppInfoCard.tsx / PingPanel.tsx
+│     │  └─ ui/                 # Button, Badge, Icon, Toast, ConfirmDialog…
+│     ├─ lib/                   # Estado de arranque, etiquetas, colores y errores IPC
 │     └─ styles/
 └─ shared/               # Tipos, canales y constantes compartidas
    ├─ constants/
@@ -377,15 +397,15 @@ npm install
 npm run dev
 ```
 
-Deberías ver el dashboard con el resumen del catálogo y la tarjeta de cada
-proyecto, y debajo los paneles «Entornos en marcha», «Procesos y puertos» y
-«Entorno». Al elegir una carpeta con «Añadir proyecto» se detecta automáticamente
-el tipo de proyecto; cada tarjeta permite consultar sus «Requisitos» y arrancar
-toda la aplicación (base de datos, servidor del framework y frontend cuando
-aplica) sin escribir ningún comando. Puedes arrancar varios proyectos a la vez:
-cada uno se actualiza en su tarjeta y aparece también en «Entornos en marcha» y
-«Procesos y puertos», donde se detienen de forma individual. En el desplegable
-«Diagnóstico del entorno» puedes probar el canal `app:ping`.
+Deberías ver la sección **Proyectos** con el resumen y una tarjeta por proyecto (o
+los pasos para añadir el primero). Al elegir una carpeta con «Añadir proyecto» se
+detecta automáticamente el tipo de proyecto; cada tarjeta permite consultar sus
+«Requisitos» y arrancar toda la aplicación (base de datos, servidor del framework
+y frontend cuando aplica) sin escribir ningún comando. Puedes arrancar varios
+proyectos a la vez: cada uno se actualiza en su tarjeta y aparece en **Actividad**
+con sus pasos y la salida de los procesos, donde se detienen de forma individual.
+En **Ajustes** están las herramientas detectadas, los puertos, las preferencias y
+el diagnóstico técnico (incluida la prueba del canal `app:ping`).
 
 Para generar el instalador, ejecuta `npm run dist` y abre
 `dist/DevLauncher-0.1.0-setup.exe` (o la versión portable, que no requiere
