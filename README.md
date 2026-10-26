@@ -42,9 +42,10 @@ Flujo de un canal:
 | `app:copy-text`          | renderer → main | Copia texto al portapapeles del sistema (EP-08)            |
 | `projects:list`          | renderer → main | Lista el catálogo de proyectos                             |
 | `projects:select-folder` | renderer → main | Abre el explorador de Windows y devuelve la carpeta        |
+| `projects:select-php`    | renderer → main | Elige el `php.exe` de un proyecto concreto                 |
 | `projects:detect`        | renderer → main | Detecta el tipo de proyecto (Laravel, React…)              |
 | `projects:add`           | renderer → main | Registra un proyecto                                       |
-| `projects:update`        | renderer → main | Edita nombre y/o ruta de un proyecto                       |
+| `projects:update`        | renderer → main | Edita nombre, ruta y/o versión de PHP de un proyecto       |
 | `projects:delete`        | renderer → main | Elimina un proyecto del catálogo                           |
 | `projects:open`          | renderer → main | Abre la carpeta del proyecto en el explorador              |
 | `projects:open-editor`   | renderer → main | Abre el proyecto en el editor configurado (EP-07)          |
@@ -52,6 +53,8 @@ Flujo de un canal:
 | `env:check-project`      | renderer → main | Comprueba los requisitos de un proyecto según su framework |
 | `env:check-ports`        | renderer → main | Comprueba la disponibilidad de puertos                     |
 | `env:inspect-port`       | renderer → main | Inspecciona un puerto y el proceso que lo ocupa            |
+| `env:list-php`           | renderer → main | Lista las instalaciones de PHP disponibles                 |
+| `env:inspect-php`        | renderer → main | Valida una ruta de PHP y devuelve su versión               |
 | `settings:get`           | renderer → main | Lee las preferencias globales                              |
 | `settings:update`        | renderer → main | Guarda las preferencias globales                           |
 | `launcher:start`         | renderer → main | Arranca el entorno de un proyecto (EP-04)                  |
@@ -107,7 +110,8 @@ Comprueba que el equipo puede ejecutar un proyecto:
 
 Las rutas de los ejecutables, la de WampServer, la del editor y la del navegador
 pueden fijarse manualmente en **Ajustes → Preferencias**, donde también se decide
-si el proyecto se abre en el editor al arrancar.
+si el proyecto se abre en el editor al arrancar. El PHP de Ajustes es el global;
+cada proyecto puede fijar su propia versión desde el botón **PHP** de su tarjeta.
 
 ## Motor de automatización (EP-04)
 
@@ -256,6 +260,21 @@ Detalles:
 - Un framework sin plan (tipo no reconocido) falla en el primer paso con un
   mensaje que explica qué falta, y no se queda ningún proceso vivo.
 
+### Versión de PHP por proyecto
+
+El PHP de **Ajustes** es el global, pero cada proyecto puede fijar su propia
+versión desde el botón **PHP** de su tarjeta. El selector detecta las versiones
+de WampServer (`bin/php/php*`), la ruta global y el PHP del PATH, y también
+permite elegir un `php.exe` concreto.
+
+- Sin versión fijada (`phpPath: null`), el proyecto usa el PHP global y sigue sus
+  cambios en **Ajustes**.
+- Una ruta concreta se guarda en `projects.json` y se usa al ejecutar
+  `artisan serve`, `spark serve` o `php -S`; npm y Composer no cambian.
+- Si la ruta fijada deja de ser válida, el arranque falla con un mensaje claro en
+  vez de usar otra versión sin avisar.
+- El cambio se aplica en el siguiente arranque o reinicio del entorno.
+
 ## Empaquetado y distribución (EP-11)
 
 `npm run dist` compila la aplicación y genera en `dist/` los artefactos para
@@ -385,6 +404,7 @@ src/
 │     │  ├─ LogViewer.tsx       # Visor de salida con filtros (EP-08)
 │     │  ├─ DiagnosticsSummary.tsx # Resumen y copia del diagnóstico (EP-08)
 │     │  ├─ ProjectCard.tsx / ProjectRequirements.tsx / DashboardStats.tsx
+│     │  ├─ PhpVersionDialog.tsx  # Selector de PHP por proyecto (EP-10)
 │     │  ├─ PortsPanel.tsx / AppInfoCard.tsx / PingPanel.tsx
 │     │  └─ ui/                 # Button, Badge, Icon, Toast, ConfirmDialog…
 │     ├─ lib/                   # Estado de arranque, etiquetas, formato de registros y errores IPC

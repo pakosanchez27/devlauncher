@@ -48,7 +48,14 @@ export async function readProjects(): Promise<Project[]> {
   try {
     const parsed = JSON.parse(raw) as StoreFile
     if (!parsed || !Array.isArray(parsed.projects)) return []
-    return parsed.projects
+    // Normaliza catálogos anteriores a la versión por proyecto de PHP.
+    return parsed.projects.map((project) => ({
+      ...project,
+      phpPath:
+        typeof project.phpPath === 'string' && project.phpPath.trim()
+          ? project.phpPath.trim()
+          : null
+    }))
   } catch {
     await quarantineCorruptFile(file)
     return []

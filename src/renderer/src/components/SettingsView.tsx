@@ -357,7 +357,8 @@ function SettingsView(): ReactElement {
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 px-5 py-3.5">
             <p className="text-[11px] text-slate-500">
-              Las rutas manuales tienen prioridad sobre la detección automática.
+              Las rutas manuales tienen prioridad sobre la detección automática. El PHP de aquí es
+              el global; cada proyecto puede fijar su propia versión desde su tarjeta.
             </p>
             <Button type="submit" variant="primary" loading={saving}>
               {saving ? 'Guardando…' : 'Guardar preferencias'}

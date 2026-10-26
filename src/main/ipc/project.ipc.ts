@@ -41,6 +41,25 @@ export function registerProjectIpcHandlers(): void {
     return result.filePaths[0]
   })
 
+  ipcMain.handle(IPC_CHANNELS.PROJECTS_SELECT_PHP, async (event): Promise<string | null> => {
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const options = {
+      title: 'Selecciona el ejecutable de PHP',
+      buttonLabel: 'Seleccionar PHP',
+      properties: ['openFile' as const],
+      filters: [
+        { name: 'Ejecutable de PHP', extensions: ['exe'] },
+        { name: 'Todos los archivos', extensions: ['*'] }
+      ]
+    }
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options)
+
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
   ipcMain.handle(
     IPC_CHANNELS.PROJECTS_DETECT,
     (_event, folderPath: string): Promise<FrameworkDetection> => detectFramework(folderPath)

@@ -20,6 +20,7 @@ import type {
   AppSettings,
   EnvironmentReport,
   ExternalOpenResult,
+  PhpInstallation,
   PortInspection,
   PortsReport,
   ProjectRequirementsReport
@@ -42,6 +43,8 @@ const api = {
     list: (): Promise<Project[]> => ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_LIST),
     selectFolder: (): Promise<string | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_SELECT_FOLDER),
+    /** Elige el php.exe de un proyecto concreto. */
+    selectPhp: (): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_SELECT_PHP),
     detect: (folderPath: string): Promise<FrameworkDetection> =>
       ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_DETECT, folderPath),
     add: (draft: ProjectDraft): Promise<Project> =>
@@ -63,7 +66,12 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PROJECT, projectPath, framework),
     checkPorts: (): Promise<PortsReport> => ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PORTS),
     inspectPort: (port: number): Promise<PortInspection> =>
-      ipcRenderer.invoke(IPC_CHANNELS.ENV_INSPECT_PORT, port)
+      ipcRenderer.invoke(IPC_CHANNELS.ENV_INSPECT_PORT, port),
+    /** Instalaciones de PHP que se pueden asignar a un proyecto. */
+    listPhp: (): Promise<PhpInstallation[]> => ipcRenderer.invoke(IPC_CHANNELS.ENV_LIST_PHP),
+    /** Valida una ruta de PHP y devuelve su versión. */
+    inspectPhp: (path: string): Promise<PhpInstallation> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ENV_INSPECT_PHP, path)
   },
 
   settings: {

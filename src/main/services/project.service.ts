@@ -314,6 +314,7 @@ export async function addProject(draft: ProjectDraft): Promise<Project> {
     path: draft.path,
     framework: draft.framework ?? detection.framework,
     detected: (draft.framework ?? detection.framework) !== 'unknown',
+    phpPath: null,
     createdAt: new Date().toISOString(),
     lastOpenedAt: null
   }
@@ -322,7 +323,7 @@ export async function addProject(draft: ProjectDraft): Promise<Project> {
   return project
 }
 
-/** Edita el nombre y/o la ruta de un proyecto existente. */
+/** Edita el nombre, la ruta y/o la versión de PHP de un proyecto existente. */
 export async function updateProject(id: string, changes: ProjectUpdate): Promise<Project> {
   const projects = await readProjects()
   const index = projects.findIndex((project) => project.id === id)
@@ -350,6 +351,25 @@ export async function updateProject(id: string, changes: ProjectUpdate): Promise
     const detection = await detectFramework(changes.path)
     updated.framework = detection.framework
     updated.detected = detection.framework !== 'unknown'
+  }
+
+  if (changes.phpPath !== undefined) {
+    if (changes.phpPath === null) {
+      updated.phpPath = null
+    } else {
+      const phpPath = changes.phpPath.trim()
+      if (!phpPath) {
+        updated.phpPath = null
+      } else {
+        try {
+          const stat = await fs.stat(phpPath)
+          if (!stat.isFile()) throw new Error('No es un archivo.')
+        } catch {
+          throw new Error('La ruta de PHP no existe o no es un archivo válido.')
+        }
+        updated.phpPath = phpPath
+      }
+    }
   }
 
   projects[index] = updated

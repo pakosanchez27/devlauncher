@@ -8,7 +8,7 @@
 export type ToolId = 'php' | 'node' | 'npm' | 'composer' | 'mysql'
 
 /** Origen de la ruta de un ejecutable detectado. */
-export type ToolSource = 'configured' | 'wamp' | 'path' | 'none'
+export type ToolSource = 'configured' | 'project' | 'wamp' | 'path' | 'none'
 
 /** Estado de una herramienta externa. */
 export interface ToolStatus {
@@ -32,6 +32,21 @@ export interface WampStatus {
   path: string | null
   phpPath: string | null
   mysqlPath: string | null
+}
+
+/** Origen de una instalación de PHP detectada. */
+export type PhpSource = 'wamp' | 'configured' | 'path' | 'custom'
+
+/** Instalación de PHP que se puede asignar a un proyecto. */
+export interface PhpInstallation {
+  /** Ruta del ejecutable (absoluta siempre que se pueda resolver). */
+  path: string
+  /** Versión detectada, si se pudo leer. */
+  version: string | null
+  /** De dónde procede la instalación. */
+  source: PhpSource
+  /** true si es el PHP global que usa DevLauncher. */
+  isGlobal: boolean
 }
 
 /** Comprobación de un requisito dentro de la carpeta de un proyecto. */

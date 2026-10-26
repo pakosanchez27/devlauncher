@@ -30,6 +30,13 @@ export interface Project {
   framework: Framework
   /** true si la detección automática reconoció el tipo de proyecto. */
   detected: boolean
+  /**
+   * Ejecutable de PHP elegido para este proyecto.
+   *
+   * `null` significa usar el PHP global de Ajustes. Una ruta concreta permite
+   * fijar una versión distinta para proyectos que lo necesiten.
+   */
+  phpPath: string | null
   /** Fecha de alta en formato ISO 8601. */
   createdAt: string
   /** Última vez que se abrió desde DevLauncher (null si nunca). */
@@ -48,6 +55,8 @@ export interface ProjectDraft {
 export interface ProjectUpdate {
   name?: string
   path?: string
+  /** Ruta del ejecutable de PHP; `null` vuelve a usar el PHP global. */
+  phpPath?: string | null
 }
 
 /** Resultado de inspeccionar una carpeta para determinar su tipo de proyecto. */

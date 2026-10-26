@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '@shared/constants/channels'
 import type {
   AppSettings,
   EnvironmentReport,
+  PhpInstallation,
   PortInspection,
   PortsReport,
   ProjectRequirementsReport
@@ -11,7 +12,9 @@ import type { Framework } from '@shared/types/project'
 import {
   checkEnvironment,
   checkPorts,
-  checkProjectRequirements
+  checkProjectRequirements,
+  inspectPhp,
+  listPhpInstallations
 } from '../services/environment.service'
 import { inspectPort } from '../services/ports.service'
 import { detectFramework } from '../services/project.service'
@@ -38,6 +41,14 @@ export function registerEnvironmentIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.ENV_INSPECT_PORT, (_event, port: number): Promise<PortInspection> =>
     inspectPort(port)
+  )
+
+  ipcMain.handle(IPC_CHANNELS.ENV_LIST_PHP, (): Promise<PhpInstallation[]> =>
+    listPhpInstallations()
+  )
+
+  ipcMain.handle(IPC_CHANNELS.ENV_INSPECT_PHP, (_event, path: string): Promise<PhpInstallation> =>
+    inspectPhp(path)
   )
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, (): Promise<AppSettings> => getSettings())

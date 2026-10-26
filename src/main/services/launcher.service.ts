@@ -451,13 +451,19 @@ async function runServerStep(
 
   setStep(session, 'server', 'running', `Localizando ${server.tool === 'php' ? 'PHP' : 'npm'}…`)
 
-  const executable = await resolveExecutable(server.tool)
+  const executable = await resolveExecutable(
+    server.tool,
+    server.tool === 'php' ? project.phpPath : null
+  )
   if (!executable.available || !executable.path) {
+    const isPhp = server.tool === 'php'
     setStep(
       session,
       'server',
       'failed',
-      `No se encontró ${server.tool === 'php' ? 'PHP' : 'npm'}. Configúralo en el panel «Entorno».`
+      isPhp && project.phpPath
+        ? 'La versión de PHP elegida para este proyecto no es válida. Cámbiala desde la tarjeta del proyecto o usa el PHP global de Ajustes.'
+        : `No se encontró ${isPhp ? 'PHP' : 'npm'}. Configúralo en el panel «Entorno».`
     )
     return false
   }

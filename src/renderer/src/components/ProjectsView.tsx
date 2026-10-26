@@ -12,6 +12,7 @@ import EmptyState from './ui/EmptyState'
 import Icon from './ui/Icon'
 import { useToast } from './ui/Toast'
 import DashboardStats from './DashboardStats'
+import PhpVersionDialog from './PhpVersionDialog'
 import ProjectCard from './ProjectCard'
 import type { ProjectAction } from './ProjectCard'
 
@@ -44,6 +45,7 @@ function ProjectsView({ onNavigate }: ProjectsViewProps): ReactElement {
   const [adding, setAdding] = useState(false)
   const [confirmingUnknown, setConfirmingUnknown] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
+  const [phpTarget, setPhpTarget] = useState<Project | null>(null)
   const [unknownTarget, setUnknownTarget] = useState<{
     folder: string
     detection: FrameworkDetection
@@ -234,6 +236,20 @@ function ProjectsView({ onNavigate }: ProjectsViewProps): ReactElement {
     }
   }
 
+  function handlePhpSaved(updated: Project): void {
+    setProjects((previous) =>
+      previous.map((project) => (project.id === updated.id ? updated : project))
+    )
+    setPhpTarget(null)
+    notify({
+      tone: 'success',
+      title: 'Versión de PHP actualizada',
+      description: updated.phpPath
+        ? 'Se usará en el próximo arranque o reinicio del entorno.'
+        : 'Este proyecto usará el PHP global de Ajustes.'
+    })
+  }
+
   async function confirmDelete(): Promise<void> {
     const project = deleteTarget
     if (!project) return
@@ -392,6 +408,7 @@ function ProjectsView({ onNavigate }: ProjectsViewProps): ReactElement {
               onOpenUrl={(target) => void handleOpenUrl(target)}
               onOpenEditor={(target) => void handleOpenEditor(target)}
               onOpenFolder={(target) => void handleOpenFolder(target)}
+              onConfigurePhp={(target) => setPhpTarget(target)}
               onShowLogs={() => onNavigate('activity')}
               onRename={(id, name) => void handleRename(id, name)}
               onDelete={setDeleteTarget}
@@ -427,6 +444,12 @@ function ProjectsView({ onNavigate }: ProjectsViewProps): ReactElement {
         loading={confirmingUnknown}
         onConfirm={() => void confirmUnknown()}
         onCancel={() => setUnknownTarget(null)}
+      />
+
+      <PhpVersionDialog
+        project={phpTarget}
+        onClose={() => setPhpTarget(null)}
+        onSaved={handlePhpSaved}
       />
     </section>
   )

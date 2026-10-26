@@ -15,6 +15,8 @@ export const IPC_CHANNELS = {
   // Gestión de proyectos (EP-02)
   PROJECTS_LIST: 'projects:list',
   PROJECTS_SELECT_FOLDER: 'projects:select-folder',
+  /** Elige el ejecutable de PHP de un proyecto concreto. */
+  PROJECTS_SELECT_PHP: 'projects:select-php',
   PROJECTS_DETECT: 'projects:detect',
   PROJECTS_ADD: 'projects:add',
   PROJECTS_UPDATE: 'projects:update',
@@ -29,6 +31,10 @@ export const IPC_CHANNELS = {
   ENV_CHECK_PORTS: 'env:check-ports',
   /** Inspección de un puerto concreto, con el proceso que lo ocupa (EP-05). */
   ENV_INSPECT_PORT: 'env:inspect-port',
+  /** Instalaciones de PHP disponibles para asignar a un proyecto. */
+  ENV_LIST_PHP: 'env:list-php',
+  /** Valida una ruta de PHP y devuelve su versión. */
+  ENV_INSPECT_PHP: 'env:inspect-php',
   SETTINGS_GET: 'settings:get',
   SETTINGS_UPDATE: 'settings:update',
 

@@ -15,6 +15,22 @@ export type ProjectAction = 'launch' | 'stop' | 'restart' | 'delete'
 const MENU_ITEM =
   'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-300 transition hover:bg-slate-800 hover:text-slate-100'
 
+/** Frameworks que se ejecutan con PHP y, por tanto, admiten versión propia. */
+const PHP_FRAMEWORKS = new Set<Project['framework']>([
+  'laravel',
+  'codeigniter',
+  'symfony',
+  'wordpress',
+  'php'
+])
+
+/** Etiqueta corta del PHP del proyecto a partir de la ruta del ejecutable. */
+function phpLabel(path: string | null | undefined): string {
+  if (!path) return 'PHP global'
+  const match = path.match(/php[\\/]?(\d+)\.(\d+)/i)
+  return match ? `PHP ${match[1]}.${match[2]}` : 'PHP propio'
+}
+
 interface ProjectCardProps {
   project: Project
   /** Sesión de arranque del proyecto (si nunca se arrancó, undefined). */
@@ -27,6 +43,7 @@ interface ProjectCardProps {
   onOpenUrl: (project: Project) => void
   onOpenEditor: (project: Project) => void
   onOpenFolder: (project: Project) => void
+  onConfigurePhp: (project: Project) => void
   onShowLogs: (project: Project) => void
   onRename: (id: string, name: string) => void
   onDelete: (project: Project) => void
@@ -43,6 +60,7 @@ function ProjectCard({
   onOpenUrl,
   onOpenEditor,
   onOpenFolder,
+  onConfigurePhp,
   onShowLogs,
   onRename,
   onDelete
@@ -311,6 +329,17 @@ function ProjectCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
+          {PHP_FRAMEWORKS.has(project.framework) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="server"
+              onClick={() => onConfigurePhp(project)}
+              title={project.phpPath ?? 'Usar el PHP global configurado en Ajustes'}
+            >
+              {phpLabel(project.phpPath)}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" icon="code" onClick={() => onOpenEditor(project)}>
             Editor
           </Button>
