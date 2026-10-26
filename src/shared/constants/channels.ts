@@ -18,6 +18,8 @@ export const IPC_CHANNELS = {
   PROJECTS_UPDATE: 'projects:update',
   PROJECTS_DELETE: 'projects:delete',
   PROJECTS_OPEN: 'projects:open',
+  /** Abre el proyecto en el editor configurado (EP-07). */
+  PROJECTS_OPEN_EDITOR: 'projects:open-editor',
 
   // Verificador de entorno (EP-03)
   ENV_CHECK: 'env:check',
@@ -37,6 +39,8 @@ export const IPC_CHANNELS = {
   LAUNCHER_STATUS: 'launcher:status',
   /** Procesos gestionados (activos e histórico reciente). */
   LAUNCHER_PROCESSES: 'launcher:processes',
+  /** Abre la aplicación de un entorno en el navegador (EP-07). */
+  LAUNCHER_OPEN_URL: 'launcher:open-url',
   /** Canal de solo emisión: main → renderer (progreso y logs del arranque). */
   LAUNCHER_EVENT: 'launcher:event'
 } as const

@@ -28,6 +28,7 @@ function EnvironmentSection(): ReactElement {
   const [form, setForm] = useState<Partial<Record<ToolId, string>>>({})
   const [wampPath, setWampPath] = useState('')
   const [editorPath, setEditorPath] = useState('')
+  const [browserPath, setBrowserPath] = useState('')
   const [openEditorOnLaunch, setOpenEditorOnLaunch] = useState(true)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -45,6 +46,7 @@ function EnvironmentSection(): ReactElement {
     setForm(settings.executables)
     setWampPath(settings.wampPath ?? '')
     setEditorPath(settings.editorPath ?? '')
+    setBrowserPath(settings.browserPath ?? '')
     setOpenEditorOnLaunch(settings.openEditorOnLaunch)
   }, [])
 
@@ -74,6 +76,7 @@ function EnvironmentSection(): ReactElement {
         executables: form,
         wampPath,
         editorPath,
+        browserPath,
         openEditorOnLaunch
       })
       await refresh()
@@ -232,6 +235,22 @@ function EnvironmentSection(): ReactElement {
             <span className="text-[11px] text-slate-500">
               Vacío: se usa Visual Studio Code del PATH o de su instalación habitual y, si no está,
               se abre la carpeta en el Explorador de Windows.
+            </span>
+          </label>
+
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs uppercase tracking-wide text-slate-500">
+              Navegador para abrir la aplicación
+            </span>
+            <input
+              value={browserPath}
+              onChange={(event) => setBrowserPath(event.target.value)}
+              placeholder="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500"
+            />
+            <span className="text-[11px] text-slate-500">
+              Vacío: se usa el navegador predeterminado de Windows. Sirve cualquier navegador con
+              ejecutable (Chrome, Firefox, Edge…).
             </span>
           </label>
 

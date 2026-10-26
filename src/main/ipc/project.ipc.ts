@@ -6,12 +6,14 @@ import type {
   ProjectDraft,
   ProjectUpdate
 } from '@shared/types/project'
+import type { ExternalOpenResult } from '@shared/types/environment'
 import {
   addProject,
   deleteProject,
   detectFramework,
   getProjects,
   openProject,
+  openProjectInEditorById,
   updateProject
 } from '../services/project.service'
 
@@ -59,5 +61,10 @@ export function registerProjectIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.PROJECTS_OPEN, (_event, id: string): Promise<Project> =>
     openProject(id)
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.PROJECTS_OPEN_EDITOR,
+    (_event, id: string): Promise<ExternalOpenResult> => openProjectInEditorById(id)
   )
 }

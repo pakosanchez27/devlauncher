@@ -2,7 +2,7 @@
 
 Lanzador de escritorio para proyectos PHP y JavaScript en Windows.
 
-> **Estado:** EP-12 (Editor y WampServer) — abre el proyecto en VS Code y arranca WAMP cuando hace falta.
+> **Estado:** EP-07 (Integración con herramientas de desarrollo) — abre el proyecto en el editor y la aplicación en el navegador configurado.
 
 ## Stack
 
@@ -46,6 +46,7 @@ Flujo de un canal:
 | `projects:update`        | renderer → main | Edita nombre y/o ruta de un proyecto                       |
 | `projects:delete`        | renderer → main | Elimina un proyecto del catálogo                           |
 | `projects:open`          | renderer → main | Abre la carpeta del proyecto en el explorador              |
+| `projects:open-editor`   | renderer → main | Abre el proyecto en el editor configurado (EP-07)          |
 | `env:check`              | renderer → main | Detecta PHP, Node, npm, Composer, MySQL y WampServer       |
 | `env:check-project`      | renderer → main | Comprueba los requisitos de un proyecto según su framework |
 | `env:check-ports`        | renderer → main | Comprueba la disponibilidad de puertos                     |
@@ -57,6 +58,7 @@ Flujo de un canal:
 | `launcher:stop-service`  | renderer → main | Detiene un único servicio gestionado                       |
 | `launcher:status`        | renderer → main | Devuelve las sesiones de arranque                          |
 | `launcher:processes`     | renderer → main | Lista los procesos gestionados (PID, puertos…)             |
+| `launcher:open-url`      | renderer → main | Abre la aplicación en el navegador configurado (EP-07)     |
 | `launcher:event`         | main → renderer | Progreso del arranque y salida de los procesos             |
 
 ### Almacenamiento
@@ -183,8 +185,9 @@ catálogo sin navegar entre vistas:
   ruta, los servicios en ejecución con sus puertos y, si falló, el motivo del
   error.
 - **Acciones rápidas** en cada tarjeta: iniciar/detener el entorno, reiniciar,
-  abrir la aplicación en el navegador cuando está lista, abrir la carpeta,
-  consultar requisitos, renombrar (edición en línea) y eliminar del catálogo.
+  abrir la aplicación en el navegador cuando está lista, abrir la carpeta, abrir
+  en el editor, consultar requisitos, renombrar (edición en línea) y eliminar del
+  catálogo.
 - **Filtro por framework**: chips con el número de proyectos de cada tipo, que se
   recalculan al añadir o borrar.
 - **Estado en tiempo real**: el dashboard se suscribe a `launcher:event`, de modo
@@ -287,6 +290,22 @@ sigue.
 - Si WAMP estaba abierto y MySQL no responde, da 15 s y explica el motivo
   (MySQL detenido en la bandeja, puerto distinto o permisos denegados).
 
+## Integración con herramientas de desarrollo (EP-07)
+
+Además del arranque automático, cada tarjeta ofrece accesos directos al código y a
+la aplicación:
+
+- **Abrir en editor**: abre la carpeta del proyecto en el editor configurado sin
+  arrancar el entorno. Usa el mismo orden de resolución que el paso del arranque
+  (ruta de «Entorno» → `code.cmd` del PATH → instalación habitual → Explorador).
+- **Abrir aplicación**: abre la URL del servidor principal en el navegador
+  configurado; en proyectos solo de frontend usa la URL de Vite. La URL la resuelve
+  el proceso principal desde la sesión de arranque, no el renderer, y solo se
+  admiten direcciones `http`/`https`.
+- **Navegador preferido**: se indica en «Entorno». Vacío usa el navegador
+  predeterminado de Windows; si la ruta configurada no existe o falla, se recurre
+  al predeterminado y se informa del motivo.
+
 ## Estructura
 
 ```
@@ -296,8 +315,9 @@ src/
 │  ├─ ipc/               # Registro de handlers IPC (app, projects, environment, launcher)
 │  └─ services/          # Lógica de negocio y persistencia
 │     ├─ app.service.ts
+│     ├─ browser.service.ts      # Apertura de la aplicación en el navegador (EP-07)
 │     ├─ command.ts              # Ejecución de comandos externos
-│     ├─ editor.service.ts       # Apertura del proyecto en el editor (EP-12)
+│     ├─ editor.service.ts       # Apertura del proyecto en el editor (EP-07/EP-12)
 │     ├─ environment.service.ts  # Detección de herramientas, requisitos y puertos
 │     ├─ launcher.service.ts     # Motor de arranque y sesiones por proyecto (EP-04/05/10)
 │     ├─ launch-plan.ts          # Plan de arranque de cada framework (EP-10)

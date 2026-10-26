@@ -104,6 +104,18 @@ export interface AppSettings {
   wampPath: string | null
   /** Editor con el que abrir los proyectos (null = detección automática). */
   editorPath: string | null
+  /** Navegador con el que abrir la aplicación (null = navegador predeterminado). */
+  browserPath: string | null
   /** true para abrir el proyecto en el editor al arrancar su entorno. */
   openEditorOnLaunch: boolean
+}
+
+/** Resultado de abrir un recurso externo: editor o navegador (EP-07). */
+export interface ExternalOpenResult {
+  /** true si el recurso se abrió. */
+  opened: boolean
+  /** Programa usado, si se pudo abrir (p. ej. «Visual Studio Code»). */
+  program: string | null
+  /** Explicación legible del resultado. */
+  message: string
 }

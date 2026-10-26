@@ -61,6 +61,10 @@ interface ProjectCardProps {
   onStop: (project: Project) => void
   onRestart: (project: Project) => void
   onOpen: (project: Project) => void
+  /** Abre la aplicación del entorno en el navegador (EP-07). */
+  onOpenUrl: (project: Project) => void
+  /** Abre el proyecto en el editor configurado (EP-07). */
+  onOpenEditor: (project: Project) => void
   onRename: (id: string, name: string) => void
   onDelete: (project: Project) => void
 }
@@ -75,6 +79,8 @@ function ProjectCard({
   onStop,
   onRestart,
   onOpen,
+  onOpenUrl,
+  onOpenEditor,
   onRename,
   onDelete
 }: ProjectCardProps): ReactElement {
@@ -88,6 +94,8 @@ function ProjectCard({
   const isRestarting = pendingAction === 'restart'
   const isStopping = pendingAction === 'stop'
   const services = session && session.state !== 'stopped' ? session.services : []
+  // Proyectos solo de frontend (Vite) no tienen servidor principal: se abre Vite.
+  const appUrl = state === 'ready' ? (session?.urls.app ?? session?.urls.vite ?? null) : null
 
   function startEditing(): void {
     setDraftName(project.name)
@@ -196,15 +204,15 @@ function ProjectCard({
           >
             {isRestarting ? 'Reiniciando…' : '↻ Reiniciar'}
           </button>
-          {state === 'ready' && session?.urls.app && (
-            <a
-              href={session.urls.app}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-indigo-800/60 bg-indigo-950/30 px-3 py-1.5 text-xs text-indigo-300 transition hover:border-indigo-500"
+          {appUrl && (
+            <button
+              onClick={() => onOpenUrl(project)}
+              disabled={busy || isRestarting}
+              title={appUrl}
+              className="rounded-lg border border-indigo-800/60 bg-indigo-950/30 px-3 py-1.5 text-xs text-indigo-300 transition hover:border-indigo-500 disabled:opacity-50"
             >
               Abrir aplicación
-            </a>
+            </button>
           )}
         </div>
 
@@ -215,6 +223,13 @@ function ProjectCard({
             className="transition hover:text-slate-200 disabled:opacity-50"
           >
             Abrir carpeta
+          </button>
+          <button
+            onClick={() => onOpenEditor(project)}
+            disabled={busy || isRestarting}
+            className="transition hover:text-slate-200 disabled:opacity-50"
+          >
+            Abrir en editor
           </button>
           <button
             onClick={() => setShowRequirements((value) => !value)}

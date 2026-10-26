@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { shell } from 'electron'
+import type { ExternalOpenResult } from '@shared/types/environment'
 import { runCommand } from './command'
 
 /**
@@ -17,15 +18,6 @@ import { runCommand } from './command'
  * Nunca lanza una excepción: un editor que no se puede abrir no debe impedir
  * que el entorno arranque.
  */
-
-export interface EditorOpenResult {
-  /** true si algo se abrió (el editor o, en su defecto, la carpeta). */
-  opened: boolean
-  /** Nombre legible del programa usado, si se pudo abrir. */
-  editor: string | null
-  /** Explicación para el paso del arranque. */
-  message: string
-}
 
 /** Instalaciones habituales de Visual Studio Code en Windows. */
 function vscodeCandidates(): string[] {
@@ -78,11 +70,11 @@ async function resolveEditor(configured: string | null): Promise<string | null> 
 export async function openProjectInEditor(
   projectPath: string,
   configured: string | null
-): Promise<EditorOpenResult> {
+): Promise<ExternalOpenResult> {
   if (!existsSync(projectPath)) {
     return {
       opened: false,
-      editor: null,
+      program: null,
       message: 'La carpeta del proyecto ya no existe; no se pudo abrir el editor.'
     }
   }
@@ -93,7 +85,7 @@ export async function openProjectInEditor(
     if (result.ok) {
       return {
         opened: true,
-        editor: editorLabel(editor),
+        program: editorLabel(editor),
         message: `Proyecto abierto en ${editorLabel(editor)}.`
       }
     }
@@ -104,7 +96,7 @@ export async function openProjectInEditor(
   if (!failure) {
     return {
       opened: true,
-      editor: 'Explorador de Windows',
+      program: 'Explorador de Windows',
       message:
         'No se encontró Visual Studio Code; se abrió la carpeta en el Explorador. Indica tu editor en «Entorno».'
     }
@@ -112,7 +104,7 @@ export async function openProjectInEditor(
 
   return {
     opened: false,
-    editor: null,
+    program: null,
     message: `No se pudo abrir el proyecto en el editor: ${failure}`
   }
 }

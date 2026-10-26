@@ -1,8 +1,10 @@
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/constants/channels'
 import type { LaunchSession, ManagedProcessInfo } from '@shared/types/launcher'
+import type { ExternalOpenResult } from '@shared/types/environment'
 import {
   getLaunchSessions,
+  openProjectUrl,
   startProjectEnvironment,
   stopProjectEnvironment,
   stopServiceProcess
@@ -29,5 +31,10 @@ export function registerLauncherIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.LAUNCHER_PROCESSES, (): ManagedProcessInfo[] =>
     listManagedProcesses()
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.LAUNCHER_OPEN_URL,
+    (_event, projectId: string): Promise<ExternalOpenResult> => openProjectUrl(projectId)
   )
 }

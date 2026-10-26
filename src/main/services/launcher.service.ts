@@ -10,6 +10,7 @@ import type {
   ManagedProcessInfo
 } from '@shared/types/launcher'
 import type { Project } from '@shared/types/project'
+import type { ExternalOpenResult } from '@shared/types/environment'
 import {
   checkProjectRequirements,
   detectWampServer,
@@ -17,6 +18,7 @@ import {
   resolveExecutable
 } from './environment.service'
 import { openProjectInEditor } from './editor.service'
+import { openUrlInBrowser } from './browser.service'
 import { broadcastLauncherEvent } from './events'
 import { APP_PORT_START, VITE_PORT, buildLaunchPlan, type LaunchPlan } from './launch-plan'
 import {
@@ -699,6 +701,21 @@ export function getLaunchSessions(): LaunchSession[] {
 /** Devuelve la sesión de un proyecto, si existe. */
 export function getLaunchSession(projectId: string): LaunchSession | null {
   return sessions.get(projectId) ?? null
+}
+
+/**
+ * Abre en el navegador la aplicación de un entorno en marcha (EP-07). Se usa la
+ * URL del servidor principal y, si el proyecto solo tiene frontend, la de Vite.
+ */
+export async function openProjectUrl(projectId: string): Promise<ExternalOpenResult> {
+  const session = sessions.get(projectId)
+  const url = session?.urls.app ?? session?.urls.vite ?? null
+  if (!url) {
+    throw new Error('El entorno no tiene una URL disponible: inícialo primero.')
+  }
+
+  const settings = await getSettings()
+  return openUrlInBrowser(url, settings.browserPath)
 }
 
 /** Detiene un servicio concreto y actualiza su sesión. */

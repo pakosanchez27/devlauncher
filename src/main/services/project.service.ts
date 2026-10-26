@@ -10,7 +10,10 @@ import type {
   ProjectDraft,
   ProjectUpdate
 } from '@shared/types/project'
+import type { ExternalOpenResult } from '@shared/types/environment'
+import { openProjectInEditor } from './editor.service'
 import { readProjects, writeProjects } from './project.repository'
+import { getSettings } from './settings.service'
 
 /**
  * Lógica de negocio del catálogo de proyectos: detección del tipo de proyecto
@@ -372,6 +375,19 @@ export async function openProject(id: string): Promise<Project> {
   projects[index] = updated
   await writeProjects(projects)
   return updated
+}
+
+/**
+ * Abre la carpeta del proyecto en el editor configurado (EP-07), sin arrancar
+ * el entorno: es el acceso rápido «Abrir en editor» de la tarjeta.
+ */
+export async function openProjectInEditorById(id: string): Promise<ExternalOpenResult> {
+  const projects = await readProjects()
+  const project = projects.find((candidate) => candidate.id === id)
+  if (!project) throw new Error('El proyecto no existe.')
+
+  const settings = await getSettings()
+  return openProjectInEditor(project.path, settings.editorPath)
 }
 
 /** Elimina un proyecto del catálogo (no borra nada en disco). */

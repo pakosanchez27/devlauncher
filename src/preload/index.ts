@@ -13,6 +13,7 @@ import type {
 import type {
   AppSettings,
   EnvironmentReport,
+  ExternalOpenResult,
   PortInspection,
   PortsReport,
   ProjectRequirementsReport
@@ -39,7 +40,9 @@ const api = {
     update: (id: string, changes: ProjectUpdate): Promise<Project> =>
       ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_UPDATE, id, changes),
     remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_DELETE, id),
-    open: (id: string): Promise<Project> => ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_OPEN, id)
+    open: (id: string): Promise<Project> => ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_OPEN, id),
+    openEditor: (id: string): Promise<ExternalOpenResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_OPEN_EDITOR, id)
   },
 
   environment: {
@@ -71,6 +74,9 @@ const api = {
     status: (): Promise<LaunchSession[]> => ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_STATUS),
     processes: (): Promise<ManagedProcessInfo[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_PROCESSES),
+    /** Abre la aplicación del entorno en el navegador configurado (EP-07). */
+    openUrl: (projectId: string): Promise<ExternalOpenResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LAUNCHER_OPEN_URL, projectId),
     /** Se suscribe a los eventos del motor; devuelve la función para cancelarla. */
     onEvent: (listener: (event: LauncherEvent) => void): (() => void) => {
       const handler = (_event: IpcRendererEvent, payload: LauncherEvent): void => listener(payload)

@@ -184,6 +184,22 @@ function ProjectDashboard(): ReactElement {
     })
   }
 
+  /** Abre la aplicación del entorno en el navegador configurado (EP-07). */
+  function handleOpenUrl(project: Project): void {
+    void run(async () => {
+      const result = await window.api.launcher.openUrl(project.id)
+      if (!result.opened) setError(result.message)
+    })
+  }
+
+  /** Acceso rápido al código: abre el proyecto en el editor (EP-07). */
+  function handleOpenEditor(project: Project): void {
+    void run(async () => {
+      const result = await window.api.projects.openEditor(project.id)
+      if (!result.opened) setError(result.message)
+    })
+  }
+
   function handleRename(id: string, name: string): void {
     void run(async () => {
       await window.api.projects.update(id, { name })
@@ -285,6 +301,8 @@ function ProjectDashboard(): ReactElement {
                 onStop={handleStop}
                 onRestart={handleRestart}
                 onOpen={handleOpen}
+                onOpenUrl={handleOpenUrl}
+                onOpenEditor={handleOpenEditor}
                 onRename={handleRename}
                 onDelete={handleDelete}
               />

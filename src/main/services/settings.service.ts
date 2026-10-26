@@ -1,12 +1,13 @@
 import type { AppSettings, ToolId } from '@shared/types/environment'
 import { readSettings, writeSettings } from './settings.repository'
 
-/** Preferencias globales: rutas de ejecutables, WampServer y editor. */
+/** Preferencias globales: rutas de ejecutables, WampServer, editor y navegador. */
 
 const DEFAULT_SETTINGS: AppSettings = {
   executables: {},
   wampPath: null,
   editorPath: null,
+  browserPath: null,
   openEditorOnLaunch: true
 }
 
@@ -17,6 +18,7 @@ export async function getSettings(): Promise<AppSettings> {
     executables: { ...DEFAULT_SETTINGS.executables, ...(stored?.executables ?? {}) },
     wampPath: stored?.wampPath ?? DEFAULT_SETTINGS.wampPath,
     editorPath: stored?.editorPath ?? DEFAULT_SETTINGS.editorPath,
+    browserPath: stored?.browserPath ?? DEFAULT_SETTINGS.browserPath,
     openEditorOnLaunch:
       typeof stored?.openEditorOnLaunch === 'boolean'
         ? stored.openEditorOnLaunch
@@ -45,6 +47,8 @@ export async function updateSettings(changes: Partial<AppSettings>): Promise<App
     wampPath: changes.wampPath !== undefined ? changes.wampPath?.trim() || null : current.wampPath,
     editorPath:
       changes.editorPath !== undefined ? changes.editorPath?.trim() || null : current.editorPath,
+    browserPath:
+      changes.browserPath !== undefined ? changes.browserPath?.trim() || null : current.browserPath,
     openEditorOnLaunch:
       typeof changes.openEditorOnLaunch === 'boolean'
         ? changes.openEditorOnLaunch
