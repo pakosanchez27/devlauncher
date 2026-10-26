@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { LaunchSession, LaunchStepState } from '@shared/types/launcher'
 import { useLaunch } from '../lib/launch-context'
 import type { LogEntry } from '../lib/launch-context'
 import { LAUNCH_STATE_LABELS, LAUNCH_STATE_TONES, STEP_LABELS } from '../lib/launch-labels'
+import { buildSessionReport, detectLogLevel } from '../lib/logs'
 import { messageFromError } from '../lib/ipc-error'
 import type { ViewId } from '../lib/views'
 import Badge from './ui/Badge'
@@ -12,6 +13,7 @@ import EmptyState from './ui/EmptyState'
 import Icon from './ui/Icon'
 import type { IconName } from './ui/Icon'
 import { useToast } from './ui/Toast'
+import LogViewer from './LogViewer'
 
 interface ActivityViewProps {
   onNavigate: (view: ViewId) => void
@@ -25,40 +27,6 @@ const STEP_ICONS: Record<LaunchStepState, { name: IconName; className: string }>
   failed: { name: 'x', className: 'text-red-300' }
 }
 
-/** Salida de los procesos de una sesión, con el servicio que la emitió. */
-function LogViewer({
-  session,
-  entries
-}: {
-  session: LaunchSession
-  entries: LogEntry[]
-}): ReactElement {
-  const ref = useRef<HTMLPreElement>(null)
-
-  useEffect(() => {
-    const node = ref.current
-    if (node) node.scrollTop = node.scrollHeight
-  }, [entries])
-
-  const labels = new Map(session.services.map((service) => [service.id, service.label]))
-
-  return (
-    <pre
-      ref={ref}
-      className="max-h-60 overflow-auto border-t border-slate-800 bg-slate-950/70 p-3 font-mono text-[11px] leading-relaxed text-slate-400"
-    >
-      {entries.length === 0
-        ? 'Sin salida todavía.'
-        : entries
-            .map(
-              (entry) =>
-                `${labels.get(entry.processId) ?? entry.processId.slice(0, 8)} › ${entry.line}`
-            )
-            .join('\n')}
-    </pre>
-  )
-}
-
 interface SessionCardProps {
   session: LaunchSession
   logs: LogEntry[]
@@ -66,6 +34,7 @@ interface SessionCardProps {
   onStop: (session: LaunchSession) => void
   onStopService: (serviceId: string) => void
   onOpenUrl: (projectId: string, target: 'app' | 'vite') => void
+  onClearLogs: (projectId: string) => void
 }
 
 /** Entorno en marcha: pasos, URLs, servicios y registro de los procesos. */
@@ -75,11 +44,43 @@ function SessionCard({
   busy,
   onStop,
   onStopService,
-  onOpenUrl
+  onOpenUrl,
+  onClearLogs
 }: SessionCardProps): ReactElement {
+  const { notify } = useToast()
+  const logDetailsRef = useRef<HTMLDetailsElement>(null)
+  const [copyingDetails, setCopyingDetails] = useState(false)
+  const errorCount = logs.filter((entry) => detectLogLevel(entry.line) === 'error').length
   const doneSteps = session.steps.filter(
     (step) => step.state === 'ready' || step.state === 'skipped'
   ).length
+
+  function openLogs(): void {
+    const node = logDetailsRef.current
+    if (!node) return
+    node.open = true
+    node.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
+
+  async function handleCopyDetails(): Promise<void> {
+    setCopyingDetails(true)
+    try {
+      await window.api.copyText(buildSessionReport(session, logs))
+      notify({
+        tone: 'success',
+        title: 'Detalles copiados',
+        description: 'Pégalos donde necesites compartir el fallo.'
+      })
+    } catch (cause) {
+      notify({
+        tone: 'error',
+        title: 'No se pudieron copiar los detalles',
+        description: messageFromError(cause)
+      })
+    } finally {
+      setCopyingDetails(false)
+    }
+  }
 
   return (
     <article className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
@@ -117,7 +118,23 @@ function SessionCard({
       {session.error && session.state === 'failed' && (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-300">
           <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
-          <p className="leading-relaxed">{session.error}</p>
+          <div className="min-w-0 flex-1">
+            <p className="leading-relaxed">{session.error}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button variant="subtle" size="sm" icon="terminal" onClick={openLogs}>
+                Ver registro
+              </Button>
+              <Button
+                variant="subtle"
+                size="sm"
+                icon="copy"
+                onClick={() => void handleCopyDetails()}
+                loading={copyingDetails}
+              >
+                Copiar detalles
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -239,15 +256,27 @@ function SessionCard({
         </div>
       )}
 
-      <details className="mt-3 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/40">
+      <details
+        ref={logDetailsRef}
+        className="mt-3 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/40"
+      >
         <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-slate-400 transition hover:text-slate-200">
           <Icon name="terminal" size={14} />
           Salida de los procesos
+          {errorCount > 0 && (
+            <span className="rounded-full bg-red-500/10 px-1.5 text-[10px] text-red-300">
+              {errorCount} {errorCount === 1 ? 'error' : 'errores'}
+            </span>
+          )}
           <span className="ml-auto rounded-full bg-slate-800 px-1.5 text-[10px] text-slate-400">
             {logs.length}
           </span>
         </summary>
-        <LogViewer session={session} entries={logs} />
+        <LogViewer
+          session={session}
+          entries={logs}
+          onClear={() => onClearLogs(session.projectId)}
+        />
       </details>
     </article>
   )
@@ -255,7 +284,7 @@ function SessionCard({
 
 /** Vista de actividad: entornos en marcha, pasos y registros en vivo. */
 function ActivityView({ onNavigate }: ActivityViewProps): ReactElement {
-  const { sessions, logs } = useLaunch()
+  const { sessions, logs, clearLogs } = useLaunch()
   const { notify } = useToast()
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -361,6 +390,7 @@ function ActivityView({ onNavigate }: ActivityViewProps): ReactElement {
               onStop={(target) => void handleStop(target)}
               onStopService={(serviceId) => void handleStopService(serviceId)}
               onOpenUrl={(projectId, target) => void handleOpenUrl(projectId, target)}
+              onClearLogs={clearLogs}
             />
           ))}
         </div>

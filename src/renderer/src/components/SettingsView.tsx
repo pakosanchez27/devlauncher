@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react'
 import type { AppSettings, EnvironmentReport, PortsReport, ToolId } from '@shared/types/environment'
 import { messageFromError } from '../lib/ipc-error'
 import AppInfoCard from './AppInfoCard'
+import DiagnosticsSummary from './DiagnosticsSummary'
 import PingPanel from './PingPanel'
 import PortsPanel from './PortsPanel'
 import Badge from './ui/Badge'
@@ -151,16 +152,6 @@ function SettingsView(): ReactElement {
         </Button>
       </header>
 
-      {report && report.missing.length > 0 && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-300">
-          <Icon name="alert" size={15} className="mt-0.5 shrink-0" />
-          <p>
-            Faltan requisitos obligatorios: <strong>{report.missing.join(', ')}</strong>. Los
-            proyectos que los necesiten no podrán arrancar hasta que estén disponibles.
-          </p>
-        </div>
-      )}
-
       {loadError && (
         <div
           role="alert"
@@ -170,6 +161,8 @@ function SettingsView(): ReactElement {
           <p>No se pudo analizar el entorno: {loadError}</p>
         </div>
       )}
+
+      {report && ports && <DiagnosticsSummary report={report} ports={ports} />}
 
       <Panel
         title="Herramientas"

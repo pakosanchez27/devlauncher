@@ -1,6 +1,7 @@
 import { registerAppIpcHandlers } from './app.ipc'
 import { registerEnvironmentIpcHandlers } from './environment.ipc'
 import { registerLauncherIpcHandlers } from './launcher.ipc'
+import { registerLogsIpcHandlers } from './logs.ipc'
 import { registerProjectIpcHandlers } from './project.ipc'
 
 /**
@@ -12,4 +13,5 @@ export function registerIpcHandlers(): void {
   registerProjectIpcHandlers()
   registerEnvironmentIpcHandlers()
   registerLauncherIpcHandlers()
+  registerLogsIpcHandlers()
 }

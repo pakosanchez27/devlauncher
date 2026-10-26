@@ -2,7 +2,7 @@
 
 Lanzador de escritorio para proyectos PHP y JavaScript en Windows.
 
-> **Estado:** EP-07 (Integración con herramientas de desarrollo) · interfaz renovada con navegación por secciones.
+> **Estado:** EP-08 (Registros y diagnóstico) · interfaz renovada con navegación por secciones.
 
 ## Stack
 
@@ -39,6 +39,7 @@ Flujo de un canal:
 | ------------------------ | --------------- | ---------------------------------------------------------- |
 | `app:get-info`           | renderer → main | Información del entorno anfitrión                          |
 | `app:ping`               | renderer → main | Prueba de eco del canal IPC                                |
+| `app:copy-text`          | renderer → main | Copia texto al portapapeles del sistema (EP-08)            |
 | `projects:list`          | renderer → main | Lista el catálogo de proyectos                             |
 | `projects:select-folder` | renderer → main | Abre el explorador de Windows y devuelve la carpeta        |
 | `projects:detect`        | renderer → main | Detecta el tipo de proyecto (Laravel, React…)              |
@@ -60,6 +61,7 @@ Flujo de un canal:
 | `launcher:processes`     | renderer → main | Lista los procesos gestionados (PID, puertos…)             |
 | `launcher:open-url`      | renderer → main | Abre la aplicación en el navegador configurado (EP-07)     |
 | `launcher:event`         | main → renderer | Progreso del arranque y salida de los procesos             |
+| `logs:export`            | renderer → main | Guarda un registro en un archivo elegido por el usuario    |
 
 ### Almacenamiento
 
@@ -186,11 +188,12 @@ estado en vivo:
   «Detener», o «Reintentar» si falló. Editor, carpeta y requisitos quedan como
   acciones secundarias, y renombrar/eliminar viven en el menú «⋯».
 - **Actividad**: los entornos activos con la línea de pasos, las URLs, los
-  servicios y la salida de cada proceso (desplegable por entorno). Desde aquí se
-  detiene un entorno, un servicio suelto o todos.
+  servicios y la salida de cada proceso (desplegable por entorno, con filtros,
+  búsqueda, copia y exportación). Desde aquí se detiene un entorno, un servicio
+  suelto o todos.
 - **Ajustes**: herramientas detectadas, WampServer, puertos, preferencias
-  (ejecutables, editor, navegador, abrir en editor al arrancar) y diagnóstico
-  técnico.
+  (ejecutables, editor, navegador, abrir en editor al arrancar), diagnóstico del
+  entorno y diagnóstico técnico.
 
 Detalles de la experiencia:
 
@@ -320,13 +323,35 @@ la aplicación:
   navegador predeterminado de Windows; si la ruta configurada no existe o falla,
   se recurre al predeterminado y se informa del motivo.
 
+## Registros y diagnóstico (EP-08)
+
+La vista **Actividad** conserva la salida de cada proceso mientras el entorno
+sigue en marcha y la muestra en un visor preparado para diagnosticar fallos:
+
+- **Filtros por servicio** (PHP, Vite, Node…) y por nivel: todo, problemas
+  (avisos y errores) o solo errores.
+- **Búsqueda** dentro de la salida y **resaltado** de errores y avisos. Cada
+  línea lleva la hora en que llegó y el servicio que la emitió.
+- **Seguir salida** automático, que se desactiva al desplazarse hacia arriba y
+  se puede recuperar con «Ir al final».
+- **Copiar** las líneas visibles, **exportar** a un archivo `.log` o **vaciar**
+  el registro del proyecto.
+- **Copiar detalles** desde el aviso de fallo: proyecto, ruta, pasos, servicios
+  y las últimas 100 líneas, listo para pegar en un informe.
+- **Diagnóstico del entorno** en **Ajustes**: herramientas disponibles, puertos
+  ocupados y WampServer, con un botón para copiar el informe completo.
+
+La salida se guarda en memoria (máximo 500 líneas por proyecto) y se conserva al
+cambiar de sección; al cerrar la aplicación se descarta. La exportación usa el
+diálogo nativo de Windows y no depende de permisos del renderer.
+
 ## Estructura
 
 ```
 src/
 ├─ main/                 # Proceso principal (Node)
 │  ├─ index.ts           # Ciclo de vida y creación de la ventana
-│  ├─ ipc/               # Registro de handlers IPC (app, projects, environment, launcher)
+│  ├─ ipc/               # Registro de handlers IPC (app, projects, environment, launcher, logs)
 │  └─ services/          # Lógica de negocio y persistencia
 │     ├─ app.service.ts
 │     ├─ browser.service.ts      # Apertura de la aplicación en el navegador (EP-07)
@@ -357,10 +382,12 @@ src/
 │     │  ├─ ProjectsView.tsx    # Catálogo, filtros y acciones
 │     │  ├─ ActivityView.tsx    # Entornos, pasos y registros
 │     │  ├─ SettingsView.tsx    # Herramientas, preferencias y diagnóstico
+│     │  ├─ LogViewer.tsx       # Visor de salida con filtros (EP-08)
+│     │  ├─ DiagnosticsSummary.tsx # Resumen y copia del diagnóstico (EP-08)
 │     │  ├─ ProjectCard.tsx / ProjectRequirements.tsx / DashboardStats.tsx
 │     │  ├─ PortsPanel.tsx / AppInfoCard.tsx / PingPanel.tsx
 │     │  └─ ui/                 # Button, Badge, Icon, Toast, ConfirmDialog…
-│     ├─ lib/                   # Estado de arranque, etiquetas, colores y errores IPC
+│     ├─ lib/                   # Estado de arranque, etiquetas, formato de registros y errores IPC
 │     └─ styles/
 └─ shared/               # Tipos, canales y constantes compartidas
    ├─ constants/
@@ -404,8 +431,11 @@ detecta automáticamente el tipo de proyecto; cada tarjeta permite consultar sus
 y frontend cuando aplica) sin escribir ningún comando. Puedes arrancar varios
 proyectos a la vez: cada uno se actualiza en su tarjeta y aparece en **Actividad**
 con sus pasos y la salida de los procesos, donde se detienen de forma individual.
-En **Ajustes** están las herramientas detectadas, los puertos, las preferencias y
-el diagnóstico técnico (incluida la prueba del canal `app:ping`).
+La salida se puede filtrar por servicio y nivel, buscar, copiar o exportar, y el
+aviso de fallo permite copiar un informe con los detalles.
+En **Ajustes** están las herramientas detectadas, los puertos, las preferencias, el
+diagnóstico del entorno (con un informe copiable) y el diagnóstico técnico
+(incluida la prueba del canal `app:ping`).
 
 Para generar el instalador, ejecuta `npm run dist` y abre
 `dist/DevLauncher-0.1.0-setup.exe` (o la versión portable, que no requiere

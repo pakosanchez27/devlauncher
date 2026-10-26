@@ -2,7 +2,13 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@shared/constants/channels'
-import type { AppInfo, PingRequest, PingResponse } from '@shared/types/ipc'
+import type {
+  AppInfo,
+  ExportLogsRequest,
+  ExportLogsResult,
+  PingRequest,
+  PingResponse
+} from '@shared/types/ipc'
 import type {
   FrameworkDetection,
   Framework,
@@ -28,6 +34,9 @@ const api = {
   ping: (request: PingRequest): Promise<PingResponse> =>
     ipcRenderer.invoke(IPC_CHANNELS.APP_PING, request),
   getAppInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC_CHANNELS.APP_GET_INFO),
+  /** Copia texto al portapapeles del sistema (EP-08). */
+  copyText: (text: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.APP_COPY_TEXT, text),
 
   projects: {
     list: (): Promise<Project[]> => ipcRenderer.invoke(IPC_CHANNELS.PROJECTS_LIST),
@@ -85,6 +94,12 @@ const api = {
         ipcRenderer.removeListener(IPC_CHANNELS.LAUNCHER_EVENT, handler)
       }
     }
+  },
+
+  logs: {
+    /** Guarda un registro en un archivo elegido por el usuario (EP-08). */
+    export: (request: ExportLogsRequest): Promise<ExportLogsResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LOGS_EXPORT, request)
   }
 }
 

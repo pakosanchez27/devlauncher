@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import type { LaunchSession } from '@shared/types/launcher'
 
@@ -6,6 +6,8 @@ import type { LaunchSession } from '@shared/types/launcher'
 export interface LogEntry {
   processId: string
   line: string
+  /** Momento en que la línea llegó al renderer (ISO 8601). */
+  at: string
 }
 
 interface LaunchContextValue {
@@ -13,9 +15,11 @@ interface LaunchContextValue {
   sessions: LaunchSession[]
   /** Salida de los procesos agrupada por proyecto. */
   logs: Record<string, LogEntry[]>
+  /** Vacía la salida acumulada de un proyecto. */
+  clearLogs: (projectId: string) => void
 }
 
-const MAX_LOG_LINES = 300
+const MAX_LOG_LINES = 500
 
 const LaunchContext = createContext<LaunchContextValue | null>(null)
 
@@ -60,7 +64,7 @@ export function LaunchProvider({ children }: { children: ReactNode }): ReactElem
         setLogs((previous) => {
           const entries = [
             ...(previous[event.projectId] ?? []),
-            { processId: event.processId, line: event.line }
+            { processId: event.processId, line: event.line, at: new Date().toISOString() }
           ]
           return { ...previous, [event.projectId]: entries.slice(-MAX_LOG_LINES) }
         })
@@ -95,7 +99,16 @@ export function LaunchProvider({ children }: { children: ReactNode }): ReactElem
     }
   }, [])
 
-  const value = useMemo(() => ({ sessions, logs }), [sessions, logs])
+  const clearLogs = useCallback((projectId: string): void => {
+    setLogs((previous) => {
+      if (!(projectId in previous)) return previous
+      const next = { ...previous }
+      delete next[projectId]
+      return next
+    })
+  }, [])
+
+  const value = useMemo(() => ({ sessions, logs, clearLogs }), [sessions, logs, clearLogs])
 
   return <LaunchContext.Provider value={value}>{children}</LaunchContext.Provider>
 }

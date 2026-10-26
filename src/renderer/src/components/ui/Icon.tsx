@@ -26,6 +26,10 @@ export type IconName =
   | 'info'
   | 'spinner'
   | 'server'
+  | 'copy'
+  | 'download'
+  | 'search'
+  | 'arrow-down'
 
 const CONTENT: Record<IconName, ReactElement> = {
   projects: (
@@ -152,6 +156,31 @@ const CONTENT: Record<IconName, ReactElement> = {
       <rect x="3" y="13" width="18" height="7" rx="2" />
       <line x1="7" y1="7.5" x2="7.01" y2="7.5" />
       <line x1="7" y1="16.5" x2="7.01" y2="16.5" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12" />
+      <polyline points="7 10 12 15 17 10" />
+      <path d="M5 21h14" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4-4" />
+    </>
+  ),
+  'arrow-down': (
+    <>
+      <path d="M12 5v14" />
+      <polyline points="19 12 12 19 5 12" />
     </>
   )
 }

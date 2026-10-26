@@ -9,6 +9,8 @@ export const IPC_CHANNELS = {
   // Aplicación / diagnóstico
   APP_PING: 'app:ping',
   APP_GET_INFO: 'app:get-info',
+  /** Copia texto al portapapeles del sistema (EP-08). */
+  APP_COPY_TEXT: 'app:copy-text',
 
   // Gestión de proyectos (EP-02)
   PROJECTS_LIST: 'projects:list',
@@ -42,7 +44,11 @@ export const IPC_CHANNELS = {
   /** Abre la aplicación de un entorno en el navegador (EP-07). */
   LAUNCHER_OPEN_URL: 'launcher:open-url',
   /** Canal de solo emisión: main → renderer (progreso y logs del arranque). */
-  LAUNCHER_EVENT: 'launcher:event'
+  LAUNCHER_EVENT: 'launcher:event',
+
+  // Registros y diagnóstico (EP-08)
+  /** Guarda un registro en un archivo elegido por el usuario. */
+  LOGS_EXPORT: 'logs:export'
 } as const
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]

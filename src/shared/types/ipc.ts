@@ -26,3 +26,18 @@ export interface AppInfo {
   chrome: string
   platform: string
 }
+
+/** Petición para guardar la salida de un proceso en un archivo (EP-08). */
+export interface ExportLogsRequest {
+  /** Nombre propuesto en el diálogo de guardado. */
+  suggestedName: string
+  /** Contenido completo del registro. */
+  content: string
+}
+
+/** Resultado de exportar un registro. */
+export interface ExportLogsResult {
+  saved: boolean
+  /** Ruta del archivo cuando el usuario confirmó el guardado. */
+  path?: string
+}
