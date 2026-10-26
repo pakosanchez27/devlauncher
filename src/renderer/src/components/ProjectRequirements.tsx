@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { ProjectRequirementsReport } from '@shared/types/environment'
+import type { Framework } from '@shared/types/project'
 import { messageFromError } from '../lib/ipc-error'
 
 interface ProjectRequirementsProps {
   projectPath: string
+  framework: Framework
 }
 
-/** Comprobación de los requisitos de un proyecto (artisan, vendor, node_modules…). */
-function ProjectRequirements({ projectPath }: ProjectRequirementsProps): ReactElement {
+/** Comprobación de los requisitos de un proyecto según su framework. */
+function ProjectRequirements({ projectPath, framework }: ProjectRequirementsProps): ReactElement {
   const [report, setReport] = useState<ProjectRequirementsReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -19,7 +21,7 @@ function ProjectRequirements({ projectPath }: ProjectRequirementsProps): ReactEl
     setError(null)
 
     window.api.environment
-      .checkProject(projectPath)
+      .checkProject(projectPath, framework)
       .then((result) => {
         if (active) setReport(result)
       })
@@ -33,7 +35,7 @@ function ProjectRequirements({ projectPath }: ProjectRequirementsProps): ReactEl
     return () => {
       active = false
     }
-  }, [projectPath])
+  }, [projectPath, framework])
 
   if (loading) return <p className="text-xs text-slate-500">Comprobando requisitos…</p>
   if (error) return <p className="text-xs text-red-400">{error}</p>

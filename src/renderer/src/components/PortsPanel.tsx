@@ -8,6 +8,7 @@ import { messageFromError } from '../lib/ipc-error'
 const KIND_LABELS: Record<LaunchServiceKind, string> = {
   wamp: 'WampServer',
   php: 'PHP',
+  node: 'Node',
   vite: 'Vite'
 }
 

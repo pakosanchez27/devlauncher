@@ -1,16 +1,18 @@
 /**
- * Contratos del motor de automatización (EP-04) y de su gestor de procesos y
- * puertos (EP-05).
+ * Contratos del motor de automatización (EP-04), de su gestor de procesos y
+ * puertos (EP-05) y de la compatibilidad de frameworks (EP-10).
  *
- * El motor arranca el entorno de un proyecto Laravel de forma ordenada:
- * comprueba requisitos → asegura la base de datos → `php artisan serve` →
- * `npm run dev` (si el proyecto usa Vite). Puede haber varios entornos en
- * marcha a la vez, cada uno con su propia sesión. Compartido entre main,
+ * El motor arranca el entorno de un proyecto de forma ordenada: comprueba
+ * requisitos → asegura la base de datos (si aplica) → servidor principal
+ * (`artisan serve`, `spark serve`, `php -S` o `npm run dev`) → servidor de
+ * desarrollo del frontend (Vite) cuando es un proyecto PHP con frontend. El
+ * plan concreto depende del framework detectado. Puede haber varios entornos
+ * en marcha a la vez, cada uno con su propia sesión. Compartido entre main,
  * preload y renderer.
  */
 
 /** Pasos del arranque ordenado. */
-export type LaunchStepId = 'requirements' | 'database' | 'php' | 'vite'
+export type LaunchStepId = 'requirements' | 'database' | 'server' | 'frontend'
 
 /** Estado de un paso del arranque. */
 export type LaunchStepState = 'pending' | 'running' | 'ready' | 'skipped' | 'failed'
@@ -24,8 +26,12 @@ export interface LaunchStep {
   message: string
 }
 
-/** Servicios que el motor puede dejar en ejecución. */
-export type LaunchServiceKind = 'wamp' | 'php' | 'vite'
+/**
+ * Servicios que el motor puede dejar en ejecución: `php` (servidor principal
+ * de un proyecto PHP), `node` (servidor de desarrollo de un proyecto JS) y
+ * `vite` (servidor de desarrollo del frontend de un proyecto PHP).
+ */
+export type LaunchServiceKind = 'wamp' | 'php' | 'node' | 'vite'
 
 /** Estado de un servicio gestionado. */
 export type LaunchServiceStatus = 'running' | 'stopped' | 'failed'

@@ -1,8 +1,8 @@
 # DevLauncher
 
-Lanzador de escritorio para proyectos Laravel en Windows.
+Lanzador de escritorio para proyectos PHP y JavaScript en Windows.
 
-> **Estado:** EP-06 (Dashboard e interfaz gráfica) — catálogo por tarjetas, resumen de estado y acciones rápidas.
+> **Estado:** EP-10 (Compatibilidad de frameworks) — Laravel, CodeIgniter, Symfony, WordPress, Next.js, React, Vue y Node.js.
 
 ## Stack
 
@@ -35,29 +35,29 @@ Flujo de un canal:
 
 ### Canales disponibles
 
-| Canal                    | Dirección       | Descripción                                          |
-| ------------------------ | --------------- | ---------------------------------------------------- |
-| `app:get-info`           | renderer → main | Información del entorno anfitrión                    |
-| `app:ping`               | renderer → main | Prueba de eco del canal IPC                          |
-| `projects:list`          | renderer → main | Lista el catálogo de proyectos                       |
-| `projects:select-folder` | renderer → main | Abre el explorador de Windows y devuelve la carpeta  |
-| `projects:detect`        | renderer → main | Detecta el tipo de proyecto (Laravel, React…)        |
-| `projects:add`           | renderer → main | Registra un proyecto                                 |
-| `projects:update`        | renderer → main | Edita nombre y/o ruta de un proyecto                 |
-| `projects:delete`        | renderer → main | Elimina un proyecto del catálogo                     |
-| `projects:open`          | renderer → main | Abre la carpeta del proyecto en el explorador        |
-| `env:check`              | renderer → main | Detecta PHP, Node, npm, Composer, MySQL y WampServer |
-| `env:check-project`      | renderer → main | Comprueba los requisitos de un proyecto              |
-| `env:check-ports`        | renderer → main | Comprueba la disponibilidad de puertos               |
-| `env:inspect-port`       | renderer → main | Inspecciona un puerto y el proceso que lo ocupa      |
-| `settings:get`           | renderer → main | Lee las preferencias globales                        |
-| `settings:update`        | renderer → main | Guarda las preferencias globales                     |
-| `launcher:start`         | renderer → main | Arranca el entorno de un proyecto (EP-04)            |
-| `launcher:stop`          | renderer → main | Detiene un entorno (o todos)                         |
-| `launcher:stop-service`  | renderer → main | Detiene un único servicio gestionado                 |
-| `launcher:status`        | renderer → main | Devuelve las sesiones de arranque                    |
-| `launcher:processes`     | renderer → main | Lista los procesos gestionados (PID, puertos…)       |
-| `launcher:event`         | main → renderer | Progreso del arranque y salida de los procesos       |
+| Canal                    | Dirección       | Descripción                                                |
+| ------------------------ | --------------- | ---------------------------------------------------------- |
+| `app:get-info`           | renderer → main | Información del entorno anfitrión                          |
+| `app:ping`               | renderer → main | Prueba de eco del canal IPC                                |
+| `projects:list`          | renderer → main | Lista el catálogo de proyectos                             |
+| `projects:select-folder` | renderer → main | Abre el explorador de Windows y devuelve la carpeta        |
+| `projects:detect`        | renderer → main | Detecta el tipo de proyecto (Laravel, React…)              |
+| `projects:add`           | renderer → main | Registra un proyecto                                       |
+| `projects:update`        | renderer → main | Edita nombre y/o ruta de un proyecto                       |
+| `projects:delete`        | renderer → main | Elimina un proyecto del catálogo                           |
+| `projects:open`          | renderer → main | Abre la carpeta del proyecto en el explorador              |
+| `env:check`              | renderer → main | Detecta PHP, Node, npm, Composer, MySQL y WampServer       |
+| `env:check-project`      | renderer → main | Comprueba los requisitos de un proyecto según su framework |
+| `env:check-ports`        | renderer → main | Comprueba la disponibilidad de puertos                     |
+| `env:inspect-port`       | renderer → main | Inspecciona un puerto y el proceso que lo ocupa            |
+| `settings:get`           | renderer → main | Lee las preferencias globales                              |
+| `settings:update`        | renderer → main | Guarda las preferencias globales                           |
+| `launcher:start`         | renderer → main | Arranca el entorno de un proyecto (EP-04)                  |
+| `launcher:stop`          | renderer → main | Detiene un entorno (o todos)                               |
+| `launcher:stop-service`  | renderer → main | Detiene un único servicio gestionado                       |
+| `launcher:status`        | renderer → main | Devuelve las sesiones de arranque                          |
+| `launcher:processes`     | renderer → main | Lista los procesos gestionados (PID, puertos…)             |
+| `launcher:event`         | main → renderer | Progreso del arranque y salida de los procesos             |
 
 ### Almacenamiento
 
@@ -90,15 +90,16 @@ color distintiva, inspirada en la marca del framework.
 
 ## Verificador de entorno
 
-Comprueba que el equipo puede ejecutar un proyecto Laravel:
+Comprueba que el equipo puede ejecutar un proyecto:
 
 - **Herramientas**: PHP, Node.js, npm, Composer y MySQL. Para cada una se
   resuelve la ruta en este orden: **ruta configurada → WampServer → PATH**.
 - **WampServer**: se busca en `C:\wamp64`, `C:\wamp`, `C:\wamp32` (o la ruta
   configurada) y se localizan PHP y MySQL dentro de `bin/`.
-- **Requisitos de proyecto**: `artisan`, `composer.json`, `vendor/`, `.env`,
-  `package.json` y `node_modules/`.
-- **Puertos**: 3306 (MySQL), 8000 (Laravel) y 5173 (Vite).
+- **Requisitos de proyecto**: propios de cada framework (por ejemplo `artisan`,
+  `composer.json` y `vendor/` en Laravel; `package.json` y `node_modules/` en un
+  proyecto Node).
+- **Puertos**: 3306 (MySQL), 3000 (Next.js), 8000 (servidores PHP) y 5173 (Vite).
 
 Las rutas de los ejecutables y la de WampServer pueden fijarse manualmente en
 el panel «Entorno» → «Rutas de ejecutables y preferencias».
@@ -106,22 +107,26 @@ el panel «Entorno» → «Rutas de ejecutables y preferencias».
 ## Motor de automatización (EP-04)
 
 El botón **«▶ Iniciar entorno»** de cada proyecto arranca todo sin escribir
-comandos. El motor ejecuta los pasos **en orden** y solo avanza cuando el
-servicio anterior está listo:
+comandos. El motor ejecuta el **plan de su framework** (EP-10) y avanza solo
+cuando el servicio anterior está listo:
 
-| Paso             | Acción                                                            | Comprobación                    |
-| ---------------- | ----------------------------------------------------------------- | ------------------------------- |
-| 1. Requisitos    | Verifica `artisan`, `composer.json` y `vendor/`                   | El proyecto debe ser Laravel    |
-| 2. Base de datos | Arranca WampServer **solo si** nada escucha en el puerto de MySQL | Espera al puerto (30 s)         |
-| 3. PHP           | `php artisan serve --host=127.0.0.1 --port=<libre>`               | Puerto abierto + respuesta HTTP |
-| 4. Vite          | `npm run dev` si el proyecto usa Vite                             | URL de Vite o puerto 5173       |
+| Paso             | Acción                                                            | Comprobación                     |
+| ---------------- | ----------------------------------------------------------------- | -------------------------------- |
+| 1. Requisitos    | Verifica los archivos y dependencias que exige el framework       | Todos los obligatorios presentes |
+| 2. Base de datos | Arranca WampServer **solo si** nada escucha en el puerto de MySQL | Espera al puerto (30 s)          |
+| 3. Servidor      | `artisan serve`, `spark serve`, `php -S` o `npm run dev`          | Puerto abierto o URL anunciada   |
+| 4. Frontend      | `npm run dev` con Vite, si es un proyecto PHP que lo declara      | URL de Vite o puerto 5173        |
+
+Los pasos 2 y 4 solo existen si el framework los necesita: un proyecto React
+arranca únicamente requisitos → servidor.
 
 Detalles:
 
 - El paso 2 se **omite** si el proyecto usa SQLite y se marca **listo** si MySQL
   ya está en marcha: nunca se arranca WampServer sin necesidad.
-- El puerto de Laravel se elige libre a partir de 8000 para no chocar con otros
-  servicios.
+- El puerto de los servidores PHP se elige libre a partir de 8000 para no chocar
+  con otros servicios. Los dev servers de Node eligen su puerto y se reserva el
+  que anuncian.
 - Si un paso falla, el arranque se detiene y se **deshace** lo ya iniciado (no
   quedan procesos a medias).
 - El panel «Entorno» muestra los pasos en vivo, las URLs resultantes y la salida
@@ -129,9 +134,9 @@ Detalles:
   puertos.
 - La salida de cada proceso se lee **línea a línea** (se acumula el resto entre
   lecturas) y se limpian los códigos ANSI antes de analizarla: así la URL que
-  anuncia Vite se reconoce aunque llegue partida o con colores.
-- Si Vite no arranca, el paso muestra el **código de salida** y las últimas
-  líneas de su salida, no un «no arrancó a tiempo» sin contexto.
+  anuncia el servidor se reconoce aunque llegue partida o con colores.
+- Si un servicio no arranca, el paso muestra el **código de salida** y las
+  últimas líneas de su salida, no un «no arrancó a tiempo» sin contexto.
 - Al cerrar DevLauncher se detienen los procesos que haya lanzado.
 
 ## Administración de procesos y puertos (EP-05)
@@ -139,9 +144,9 @@ Detalles:
 Cada proyecto arrancado tiene su **propia sesión**: pueden convivir varios
 entornos a la vez y cada uno se detiene por separado.
 
-- **Sin conflictos internos**: los puertos de `artisan serve` se reservan por
+- **Sin conflictos internos**: los puertos de los servidores PHP se reservan por
   sesión; dos proyectos nunca reciben el mismo, aunque el servicio todavía no
-  esté escuchando. Vite se reserva el puerto que anuncia al arrancar.
+  esté escuchando. Los dev servers de Node reservan el puerto que anuncian.
 - **Conflictos externos**: al comprobar un puerto se muestra qué ejecutable lo
   ocupa y su PID (`env:inspect-port`). El panel «Puertos» del verificador también
   indica el dueño de 3306, 8000 y 5173.
@@ -182,9 +187,46 @@ catálogo sin navegar entre vistas:
   de cada fallo.
 - Al eliminar un proyecto que está en marcha, su entorno se detiene primero.
 
-Laravel es el único framework que el motor arranca por ahora; el resto se puede
-registrar y consultar, pero su arranque llegará con la compatibilidad de
-frameworks (EP-10).
+Cualquier framework soportado por el motor (EP-10) se puede arrancar desde su
+tarjeta; el tipo no reconocido muestra el motivo en el primer paso.
+
+## Compatibilidad de frameworks (EP-10)
+
+El motor no está atado a Laravel: cada framework tiene un **plan de arranque**
+en `src/main/services/launch-plan.ts` que decide qué pasos se ejecutan, con qué
+comando y qué comprobación de requisitos se aplica.
+
+| Framework   | Servidor principal                                      | Base de datos               | Frontend            |
+| ----------- | ------------------------------------------------------- | --------------------------- | ------------------- |
+| Laravel     | `php artisan serve --host=127.0.0.1 --port=<libre>`     | `.env` (o SQLite)           | Vite, si lo declara |
+| CodeIgniter | `php spark serve` (CI4) o `php -S … -t <docroot>` (CI3) | `.env` (o SQLite)           | —                   |
+| Symfony     | `php -S 127.0.0.1:<libre> -t public`                    | `.env` (o SQLite)           | Vite, si lo declara |
+| WordPress   | `php -S 127.0.0.1:<libre> -t <docroot>`                 | `wp-config.php` (`DB_HOST`) | —                   |
+| Next.js     | `npm run dev` (o `start`/`serve`)                       | —                           | —                   |
+| React       | `npm run dev` (o `start`/`serve`)                       | —                           | —                   |
+| Vue         | `npm run dev` (o `start`/`serve`)                       | —                           | —                   |
+| Node.js     | `npm run dev` (o `start`/`serve`)                       | —                           | —                   |
+| PHP         | `php -S 127.0.0.1:<libre> -t <docroot>`                 | —                           | —                   |
+
+Detalles:
+
+- **Document root**: si el proyecto tiene `public/` se sirve esa carpeta (Laravel,
+  Symfony, CodeIgniter 4, WordPress Bedrock); si no, la raíz del proyecto.
+- **Requisitos por framework**: Laravel exige `artisan`, `composer.json` y
+  `vendor/`; Symfony `bin/console`, `composer.json` y `vendor/`; CodeIgniter
+  `spark` o las carpetas `application/` + `system/`; WordPress `wp-config.php`;
+  los proyectos Node `package.json` y `node_modules/`. El panel «Requisitos» de
+  cada tarjeta usa la misma comprobación que el motor.
+- **Script de arranque de Node**: se usa el primero disponible entre `dev`,
+  `start` (Create React App) y `serve` (Vue CLI). Si `package.json` no declara
+  ninguno, el arranque explica el motivo en vez de fallar sin contexto.
+- **Base de datos**: solo se comprueba en los frameworks que la usan, con el
+  puerto que declare el proyecto (`.env` o `wp-config.php`) y MySQL ya en marcha
+  no se vuelve a arrancar.
+- **Dev servers de Node**: DevLauncher no impone el puerto; espera a que el
+  servidor anuncie su URL (`Local: http://…`) y reserva el puerto anunciado.
+- Un framework sin plan (tipo no reconocido) falla en el primer paso con un
+  mensaje que explica qué falta, y no se queda ningún proceso vivo.
 
 ## Estructura
 
@@ -197,7 +239,8 @@ src/
 │     ├─ app.service.ts
 │     ├─ command.ts              # Ejecución de comandos externos
 │     ├─ environment.service.ts  # Detección de herramientas, requisitos y puertos
-│     ├─ launcher.service.ts     # Motor de arranque y sesiones por proyecto (EP-04/05)
+│     ├─ launcher.service.ts     # Motor de arranque y sesiones por proyecto (EP-04/05/10)
+│     ├─ launch-plan.ts          # Plan de arranque de cada framework (EP-10)
 │     ├─ ports.service.ts        # Reserva de puertos y dueño de cada puerto (EP-05)
 │     ├─ process.service.ts      # Procesos de larga duración (spawn/kill) y huérfanos
 │     ├─ process.repository.ts   # Persistencia de procesos (limpieza tras un cierre anómalo)
@@ -251,8 +294,8 @@ Deberías ver el dashboard con el resumen del catálogo y la tarjeta de cada
 proyecto, y debajo los paneles «Entornos en marcha», «Procesos y puertos» y
 «Entorno». Al elegir una carpeta con «Añadir proyecto» se detecta automáticamente
 el tipo de proyecto; cada tarjeta permite consultar sus «Requisitos» y arrancar
-toda la aplicación (base de datos, PHP y Vite) sin escribir ningún comando. Puedes
-arrancar varios proyectos a la vez: cada uno se actualiza en su tarjeta y aparece
-también en «Entornos en marcha» y «Procesos y puertos», donde se detienen de forma
-individual. En el desplegable «Diagnóstico del entorno» puedes probar el canal
-`app:ping`.
+toda la aplicación (base de datos, servidor del framework y frontend cuando
+aplica) sin escribir ningún comando. Puedes arrancar varios proyectos a la vez:
+cada uno se actualiza en su tarjeta y aparece también en «Entornos en marcha» y
+«Procesos y puertos», donde se detienen de forma individual. En el desplegable
+«Diagnóstico del entorno» puedes probar el canal `app:ping`.

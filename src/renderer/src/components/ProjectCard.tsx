@@ -38,6 +38,7 @@ const STATE_DOT_CLASSES: Record<LaunchState, string> = {
 const SERVICE_KIND_LABELS: Record<LaunchServiceKind, string> = {
   wamp: 'WAMP',
   php: 'PHP',
+  node: 'Node',
   vite: 'Vite'
 }
 
@@ -239,7 +240,9 @@ function ProjectCard({
         </div>
       </div>
 
-      {showRequirements && <ProjectRequirements projectPath={project.path} />}
+      {showRequirements && (
+        <ProjectRequirements projectPath={project.path} framework={project.framework} />
+      )}
     </article>
   )
 }

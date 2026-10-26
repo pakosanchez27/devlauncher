@@ -5,6 +5,7 @@ import { IPC_CHANNELS } from '@shared/constants/channels'
 import type { AppInfo, PingRequest, PingResponse } from '@shared/types/ipc'
 import type {
   FrameworkDetection,
+  Framework,
   Project,
   ProjectDraft,
   ProjectUpdate
@@ -43,8 +44,11 @@ const api = {
 
   environment: {
     check: (): Promise<EnvironmentReport> => ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK),
-    checkProject: (projectPath: string): Promise<ProjectRequirementsReport> =>
-      ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PROJECT, projectPath),
+    checkProject: (
+      projectPath: string,
+      framework?: Framework
+    ): Promise<ProjectRequirementsReport> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PROJECT, projectPath, framework),
     checkPorts: (): Promise<PortsReport> => ipcRenderer.invoke(IPC_CHANNELS.ENV_CHECK_PORTS),
     inspectPort: (port: number): Promise<PortInspection> =>
       ipcRenderer.invoke(IPC_CHANNELS.ENV_INSPECT_PORT, port)

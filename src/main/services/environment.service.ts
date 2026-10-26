@@ -11,6 +11,7 @@ import type {
   ToolStatus,
   WampStatus
 } from '@shared/types/environment'
+import type { Framework } from '@shared/types/project'
 import { executableName, runCommand } from './command'
 import { inspectPort } from './ports.service'
 import { getSettings } from './settings.service'
@@ -41,54 +42,210 @@ const WAMP_CANDIDATES = ['C:\\wamp64', 'C:\\wamp', 'C:\\wamp32']
 
 const DEFAULT_PORTS: Array<{ port: number; label: string }> = [
   { port: 3306, label: 'MySQL' },
-  { port: 8000, label: 'Laravel (artisan serve)' },
-  { port: 5173, label: 'Vite (dev server)' }
+  { port: 3000, label: 'Next.js (dev server)' },
+  { port: 8000, label: 'Servidores PHP (artisan, spark, php -S)' },
+  { port: 5173, label: 'Dev servers de frontend (Vite)' }
 ]
 
-const PROJECT_REQUIREMENTS: Array<Omit<RequirementCheck, 'present'>> = [
-  {
-    id: 'artisan',
-    label: 'Artisan (CLI de Laravel)',
-    target: 'artisan',
-    required: true,
-    hint: 'Falta el archivo artisan: no parece un proyecto Laravel completo.'
-  },
-  {
-    id: 'composerJson',
-    label: 'composer.json',
-    target: 'composer.json',
-    required: true,
-    hint: 'Sin composer.json no se pueden instalar las dependencias PHP.'
-  },
-  {
-    id: 'vendor',
-    label: 'Dependencias PHP (vendor/)',
-    target: 'vendor',
-    required: true,
-    hint: 'Ejecuta «composer install» para generar la carpeta vendor/.'
-  },
-  {
-    id: 'env',
-    label: 'Archivo .env',
-    target: '.env',
-    required: false,
-    hint: 'Copia .env.example a .env y configura la clave de la aplicación.'
-  },
-  {
-    id: 'packageJson',
-    label: 'package.json (frontend)',
-    target: 'package.json',
-    required: false,
-    hint: 'Sin package.json no hay frontend que compilar con Vite.'
-  },
-  {
-    id: 'nodeModules',
-    label: 'Dependencias JS (node_modules/)',
-    target: 'node_modules',
-    required: false,
-    hint: 'Ejecuta «npm install» para generar la carpeta node_modules/.'
+/** Requisito comprobable dentro de la carpeta de un proyecto. */
+interface RequirementSpec {
+  id: string
+  label: string
+  /** Ruta relativa comprobada (informativa si se usa `present`). */
+  target: string
+  required: boolean
+  hint: string
+  /** Comprobación propia; por defecto basta con que exista `target`. */
+  present?: () => Promise<boolean>
+}
+
+/** Requisito simple: existe una ruta dentro del proyecto. */
+function requirementAt(
+  id: string,
+  label: string,
+  target: string,
+  required: boolean,
+  hint: string
+): RequirementSpec {
+  return { id, label, target, required, hint }
+}
+
+/** Requisitos comunes de un proyecto PHP con Composer. */
+function composerRequirements(): RequirementSpec[] {
+  return [
+    requirementAt(
+      'composerJson',
+      'composer.json',
+      'composer.json',
+      true,
+      'Sin composer.json no se pueden instalar las dependencias PHP.'
+    ),
+    requirementAt(
+      'vendor',
+      'Dependencias PHP (vendor/)',
+      'vendor',
+      true,
+      'Ejecuta «composer install» para generar la carpeta vendor/.'
+    ),
+    requirementAt(
+      'env',
+      'Archivo .env',
+      '.env',
+      false,
+      'Copia .env.example a .env y configura la clave de la aplicación.'
+    ),
+    requirementAt(
+      'packageJson',
+      'package.json (frontend)',
+      'package.json',
+      false,
+      'Sin package.json no hay frontend que compilar con Vite o Encore.'
+    ),
+    requirementAt(
+      'nodeModules',
+      'Dependencias JS (node_modules/)',
+      'node_modules',
+      false,
+      'Ejecuta «npm install» para generar la carpeta node_modules/.'
+    )
+  ]
+}
+
+/** Requisitos comunes de un proyecto Node. */
+function nodeRequirements(): RequirementSpec[] {
+  return [
+    requirementAt(
+      'packageJson',
+      'package.json',
+      'package.json',
+      true,
+      'Sin package.json no hay forma de arrancar el proyecto.'
+    ),
+    requirementAt(
+      'nodeModules',
+      'Dependencias JS (node_modules/)',
+      'node_modules',
+      true,
+      'Ejecuta «npm install» para generar la carpeta node_modules/.'
+    )
+  ]
+}
+
+/**
+ * Requisitos de cada framework (EP-10). Se comprueban al arrancar el entorno y
+ * desde el panel de requisitos de cada proyecto.
+ */
+function requirementSpecs(projectPath: string, framework: Framework): RequirementSpec[] {
+  switch (framework) {
+    case 'laravel':
+      return [
+        requirementAt(
+          'artisan',
+          'Artisan (CLI de Laravel)',
+          'artisan',
+          true,
+          'Falta el archivo artisan: no parece un proyecto Laravel completo.'
+        ),
+        ...composerRequirements()
+      ]
+
+    case 'codeigniter': {
+      const spark = join(projectPath, 'spark')
+      const application = join(projectPath, 'application')
+      const system = join(projectPath, 'system')
+      return [
+        {
+          id: 'structure',
+          label: 'Estructura (spark o application/ + system/)',
+          target: 'spark',
+          required: true,
+          hint: 'No parece un proyecto CodeIgniter: falta spark (CI4) o las carpetas application/ y system/ (CI3).',
+          present: async () =>
+            (await pathExists(spark)) ||
+            ((await pathExists(application)) && (await pathExists(system)))
+        },
+        requirementAt(
+          'composerJson',
+          'composer.json',
+          'composer.json',
+          false,
+          'Sin composer.json no se pueden instalar las dependencias PHP.'
+        ),
+        requirementAt(
+          'vendor',
+          'Dependencias PHP (vendor/)',
+          'vendor',
+          false,
+          'Ejecuta «composer install» para generar la carpeta vendor/.'
+        )
+      ]
+    }
+
+    case 'symfony':
+      return [
+        requirementAt(
+          'console',
+          'Consola de Symfony (bin/console)',
+          join('bin', 'console'),
+          true,
+          'Falta bin/console: no parece un proyecto Symfony completo.'
+        ),
+        ...composerRequirements()
+      ]
+
+    case 'wordpress':
+      return [
+        requirementAt(
+          'wpConfig',
+          'wp-config.php',
+          'wp-config.php',
+          true,
+          'Sin wp-config.php WordPress no puede conectarse a la base de datos.'
+        ),
+        requirementAt(
+          'wpContent',
+          'Carpeta wp-content/',
+          'wp-content',
+          false,
+          'Sin wp-content/ faltan temas y plugins (puede ser una instalación personalizada).'
+        )
+      ]
+
+    case 'nextjs':
+    case 'react':
+    case 'vue':
+    case 'node':
+      return nodeRequirements()
+
+    case 'php':
+      return [
+        requirementAt(
+          'index',
+          'index.php',
+          'index.php',
+          false,
+          'Sin index.php en la raíz, el servidor integrado no sabrá qué servir.'
+        ),
+        requirementAt(
+          'composerJson',
+          'composer.json',
+          'composer.json',
+          false,
+          'Sin composer.json no se pueden instalar las dependencias PHP.'
+        ),
+        requirementAt(
+          'vendor',
+          'Dependencias PHP (vendor/)',
+          'vendor',
+          false,
+          'Ejecuta «composer install» para generar la carpeta vendor/.'
+        )
+      ]
+
+    default:
+      return []
   }
-]
+}
 
 async function pathExists(target: string): Promise<boolean> {
   try {
@@ -257,18 +414,20 @@ export async function checkEnvironment(): Promise<EnvironmentReport> {
   }
 }
 
-/** Comprueba los requisitos de un proyecto concreto. */
+/** Comprueba los requisitos de un proyecto concreto según su framework. */
 export async function checkProjectRequirements(
-  projectPath: string
+  projectPath: string,
+  framework: Framework
 ): Promise<ProjectRequirementsReport> {
   if (!(await pathExists(projectPath))) {
     throw new Error('La carpeta del proyecto no existe.')
   }
 
+  const specs = requirementSpecs(projectPath, framework)
   const checks: RequirementCheck[] = await Promise.all(
-    PROJECT_REQUIREMENTS.map(async (requirement) => ({
-      ...requirement,
-      present: await pathExists(join(projectPath, requirement.target))
+    specs.map(async ({ present, ...spec }) => ({
+      ...spec,
+      present: await (present ? present() : pathExists(join(projectPath, spec.target)))
     }))
   )
 
